@@ -5,6 +5,20 @@ import FeaturedArticleHero from '@/components/FeaturedArticleHero.vue';
 import ArticleListItem from '@/components/ArticleListItem.vue';
 import SidebarWidget from '@/components/SidebarWidget.vue';
 import PopularNewsList from '@/components/PopularNewsList.vue';
+import { useHead } from '@vueuse/head';
+
+useHead({
+  title: 'Aura News - AI 新聞平台',
+  meta: [
+    { name: 'description', content: 'Aura News - AI 新聞平台，最新、最即時的新聞內容。' },
+    { property: 'og:title', content: 'Aura News - AI 新聞平台' },
+    { property: 'og:description', content: 'Aura News - AI 新聞平台，最新、最即時的新聞內容。' },
+    { property: 'og:type', content: 'website' },
+    { property: 'og:image', content: '/favicon.ico' },
+    { property: 'og:url', content: typeof window !== 'undefined' ? window.location.href : '' },
+    { name: 'twitter:card', content: 'summary_large_image' }
+  ]
+});
 
 const articles = ref([]);
 const isLoading = ref(true);

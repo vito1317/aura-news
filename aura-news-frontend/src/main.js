@@ -4,6 +4,7 @@ import App from './App.vue';
 import router from './router';
 import axios from 'axios';
 import { useAuthStore } from './stores/auth';
+import { createHead } from '@vueuse/head'
 
 import './assets/main.css';
 
@@ -20,6 +21,8 @@ axios.interceptors.request.use(config => {
 });
 
 const app = createApp(App);
+const head = createHead()
+app.use(head)
 app.use(createPinia());
 
 const authStore = useAuthStore();

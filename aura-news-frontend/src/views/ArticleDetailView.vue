@@ -1,10 +1,11 @@
 <script setup>
-import { ref, onMounted, computed } from 'vue';
+import { ref, onMounted, computed, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import axios from 'axios';
 import DOMPurify from 'dompurify';
 import { marked } from 'marked';
 import noImage from '@/assets/no-image.jpg';
+import { useHead } from '@vueuse/head';
 
 const route = useRoute();
 const article = ref(null);
@@ -24,6 +25,37 @@ const safeContent = computed(() => {
     return DOMPurify.sanitize(html);
   }
   return '';
+});
+
+watch(article, (val) => {
+  if (val) {
+    useHead({
+      title: `${val.title} - Aura News`,
+      meta: [
+        { name: 'description', content: val.summary || val.title },
+        { property: 'og:title', content: val.title },
+        { property: 'og:description', content: val.summary || val.title },
+        { property: 'og:type', content: 'article' },
+        { property: 'og:image', content: val.image_url || '/favicon.ico' },
+        { property: 'og:url', content: typeof window !== 'undefined' ? window.location.href : '' },
+        { name: 'twitter:card', content: 'summary_large_image' }
+      ],
+      script: [
+        {
+          type: 'application/ld+json',
+          children: JSON.stringify({
+            '@context': 'https://schema.org',
+            '@type': 'NewsArticle',
+            headline: val.title,
+            datePublished: val.published_at,
+            author: { '@type': 'Person', name: val.author || '匿名' },
+            image: val.image_url || '',
+            articleBody: val.content || ''
+          })
+        }
+      ]
+    });
+  }
 });
 
 const share = (platform) => {

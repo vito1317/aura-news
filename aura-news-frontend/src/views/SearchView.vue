@@ -3,11 +3,30 @@ import { ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import axios from 'axios';
 import ArticleListItem from '@/components/ArticleListItem.vue';
+import { useHead } from '@vueuse/head';
 
 const route = useRoute();
 const query = ref(route.query.q || '');
 const articles = ref([]);
 const isLoading = ref(true);
+
+watch(() => route.query.q, (newQuery) => {
+  if (newQuery) {
+    query.value = newQuery;
+    useHead({
+      title: `搜尋：${newQuery} - Aura News`,
+      meta: [
+        { name: 'description', content: `Aura News - 搜尋「${newQuery}」的新聞結果。` },
+        { property: 'og:title', content: `搜尋：${newQuery} - Aura News` },
+        { property: 'og:description', content: `Aura News - 搜尋「${newQuery}」的新聞結果。` },
+        { property: 'og:type', content: 'website' },
+        { property: 'og:url', content: typeof window !== 'undefined' ? window.location.href : '' },
+        { name: 'twitter:card', content: 'summary_large_image' }
+      ]
+    });
+    searchArticles(newQuery);
+  }
+}, { immediate: true });
 
 const searchArticles = async (searchQuery) => {
   if (!searchQuery) return;
@@ -21,13 +40,6 @@ const searchArticles = async (searchQuery) => {
     isLoading.value = false;
   }
 };
-
-watch(() => route.query.q, (newQuery) => {
-  if (newQuery) {
-    query.value = newQuery;
-    searchArticles(newQuery);
-  }
-}, { immediate: true });
 </script>
 
 <template>

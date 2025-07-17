@@ -3,6 +3,7 @@ import { ref, watch, onMounted } from 'vue';
 import { useRoute } from 'vue-router';
 import axios from 'axios';
 import ArticleCard from '@/components/ArticleCard.vue';
+import { useHead } from '@vueuse/head';
 
 const route = useRoute();
 const category = ref(null);
@@ -17,6 +18,19 @@ const fetchCategoryArticles = async (slug) => {
     category.value = response.data.category;
     articles.value = response.data.articles.data;
     pagination.value = response.data.articles;
+    if (category.value) {
+      useHead({
+        title: `分類：${category.value.name} - Aura News`,
+        meta: [
+          { name: 'description', content: `Aura News - ${category.value.name} 分類新聞列表。` },
+          { property: 'og:title', content: `分類：${category.value.name} - Aura News` },
+          { property: 'og:description', content: `Aura News - ${category.value.name} 分類新聞列表。` },
+          { property: 'og:type', content: 'website' },
+          { property: 'og:url', content: typeof window !== 'undefined' ? window.location.href : '' },
+          { name: 'twitter:card', content: 'summary_large_image' }
+        ]
+      });
+    }
   } catch (error) {
     console.error("無法載入分類文章:", error);
   } finally {

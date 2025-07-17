@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@toast-ui/editor": "^3.2.2",
+    "@vueuse/head": "^2.0.0",
     "axios": "^1.10.0",
     "dompurify": "^3.2.6",
     "pinia": "^3.0.3",
