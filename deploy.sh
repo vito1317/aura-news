@@ -10,4 +10,4 @@ php artisan view:cache
 
 cd /var/www/aura-news/aura-news-frontend
 npm install --legacy-peer-deps
-npm run build
+#npm run build
