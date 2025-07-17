@@ -16,7 +16,7 @@ const fetch = require('node-fetch');
   const links = [
     { url: '/', changefreq: 'daily', priority: 1.0 },
     ...articles.map(article => ({
-      url: `/article/${article.id}`,
+      url: `/articles/${article.id}`,
       changefreq: 'weekly',
       priority: 0.8,
     })),
