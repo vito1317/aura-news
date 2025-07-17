@@ -16,7 +16,7 @@ Aura News 是一個全端新聞平台專案，包含後端（Laravel, PHP）與�
 ## 技術棧
 - PHP 8.x, Laravel 12.x
 - MySQL / MariaDB
-- Node.js 16+
+- Node.js 20+
 - Vue 3, Vite, TailwindCSS
 - Composer, npm
 - 整合 Gemini AI API
@@ -54,7 +54,9 @@ npm run dev
 - RESTful API
 - 新聞/分類/用戶管理
 - 前台新聞瀏覽、分類、搜尋
-- 響應式設計
+- 響應式設計(RWD)
+- SEO sitemap.xml 自動化產生，支援 slug 路徑
+- GitHub Actions 自動化部署，支援 SSH/密碼、排除 .env、dist、storage 等敏感目錄
 
 ## 協作與貢獻
 - 請分支開發並發送 Pull Request
