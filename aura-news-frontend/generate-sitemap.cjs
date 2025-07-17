@@ -5,27 +5,23 @@ const fetch = require('node-fetch');
 (async () => {
   const baseUrl = 'https://news.vito1317.com';
 
-  // 取得所有文章
   const articles = await fetch('https://api-news.vito1317.com/api/articles')
     .then(res => res.json())
     .then(data => Array.isArray(data.data) ? data.data : data);
 
-  // 取得所有分類
   const categories = await fetch('https://api-news.vito1317.com/api/categories')
     .then(res => res.json())
     .then(data => Array.isArray(data.data) ? data.data : data);
 
   const links = [
     { url: '/', changefreq: 'daily', priority: 1.0 },
-    // 文章
     ...articles.map(article => ({
       url: `/article/${article.id}`,
       changefreq: 'weekly',
       priority: 0.8,
     })),
-    // 分類
     ...categories.map(category => ({
-      url: `/category/${category.id}`,
+      url: `/category/${category.slug}`,
       changefreq: 'weekly',
       priority: 0.7,
     })),
