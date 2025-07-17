@@ -17,8 +17,8 @@ jobs:
 
       - name: Rsync files to server
         run: |
-          sshpass -p "${{ secrets.SSH_PASSWORD }}" rsync -avz --delete ./ ${{ secrets.SSH_USER }}@${{ secrets.SSH_SERVER }}:/var/www/aura-news
+          sshpass -p "${{ secrets.SSH_PASSWORD }}" rsync -avz --delete -e "ssh -o StrictHostKeyChecking=no" ./ ${{ secrets.SSH_USER }}@${{ secrets.SSH_SERVER }}:/var/www/aura-news
 
       - name: Run deploy script
         run: |
-          sshpass -p "${{ secrets.SSH_PASSWORD }}" ssh -o StrictHostKeyChecking=no ${{ secrets.SSH_USER }}@${{ secrets.SSH_SERVER }} 'cd /var/www/aura-news && ./deploy.sh'
+          sshpass -p "${{ secrets.SSH_PASSWORD }}" ssh -o StrictHostKeyChecking=no ${{ secrets.SSH_USER }}@${{ secrets.SSH_SERVER }} 'cd /var/www/aura-news && ./deploy.sh' 
