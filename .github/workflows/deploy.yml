@@ -19,7 +19,7 @@ jobs:
 
       - name: Rsync files to server
         run: |
-          sshpass -p "${{ secrets.SSH_PASSWORD }}" rsync -avz --delete \
+          sshpass -p "${{ secrets.SSH_PASSWORD }}" rsync -avz \
             --exclude 'aura-news-backend/storage/' \
             --exclude 'aura-news-backend/.env' \
             --exclude 'aura-news-frontend/dist/' \
