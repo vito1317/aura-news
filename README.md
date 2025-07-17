@@ -90,4 +90,4 @@ npm run dev
 - 問題請用 GitHub Issue 回報
 
 ## 授權條款
-本專案採用 [MIT License](License)。 
+本專案採用 [MIT License](LICENSE)。 
