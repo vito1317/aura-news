@@ -101,6 +101,14 @@ class ArticleController extends Controller
         $image_url = null;
         $category_id = null;
         $cleanContent = null;
+        
+        // 記錄 HTML 長度以便除錯
+        \Log::info('開始解析 HTML', [
+            'url' => $url,
+            'html_length' => strlen($html),
+            'html_preview' => substr($html, 0, 500)
+        ]);
+        
         try {
             $doc = new \DOMDocument();
             @$doc->loadHTML('<?xml encoding="utf-8" ?>' . $html);
@@ -111,6 +119,12 @@ class ArticleController extends Controller
             if ($imgNode && $imgNode->getAttribute('content')) {
                 $image_url = $imgNode->getAttribute('content');
             }
+            
+            \Log::info('基本資訊擷取', [
+                'title' => $title,
+                'image_url' => $image_url
+            ]);
+            
             if (preg_match('/https?:\/\/(?:[\w-]+\.)*yahoo\.com\//i', $url)) {
                 $atomsDiv = $xpath->query('//*[contains(@class, "atoms")]')->item(0);
                 $yahooText = [];
@@ -123,6 +137,11 @@ class ArticleController extends Controller
                 if (mb_strlen(trim($joined)) > 50) {
                     $cleanContent = nl2br(e($joined));
                 }
+                \Log::info('Yahoo 內容擷取', [
+                    'atoms_div_found' => $atomsDiv !== null,
+                    'yahoo_text_count' => count($yahooText),
+                    'joined_length' => mb_strlen(trim($joined))
+                ]);
             }
             if (!$cleanContent) {
                 $contentNode = $xpath->query(
@@ -131,16 +150,33 @@ class ArticleController extends Controller
                 if ($contentNode) {
                     $rawContent = $doc->saveHTML($contentNode);
                     $cleanContent = \Purifier::clean($rawContent);
+                    \Log::info('一般內容擷取成功', [
+                        'content_node_tag' => $contentNode->tagName,
+                        'raw_content_length' => strlen($rawContent),
+                        'clean_content_length' => strlen($cleanContent)
+                    ]);
+                } else {
+                    \Log::warning('未找到內容節點');
                 }
             }
             if (!$cleanContent) {
                 $bodyNode = $xpath->query('//body')->item(0);
                 if ($bodyNode) {
                     $cleanContent = \Purifier::clean($doc->saveHTML($bodyNode));
+                    \Log::info('使用 body 節點', [
+                        'body_content_length' => strlen($cleanContent)
+                    ]);
+                } else {
+                    \Log::warning('未找到 body 節點');
                 }
             }
         } catch (\Exception $e) {
-            return response()->json(['message' => '主文擷取失敗'], 422);
+            \Log::error('主文擷取失敗', [
+                'url' => $url,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            return response()->json(['message' => '主文擷取失敗: ' . $e->getMessage()], 422);
         }
         $plainText = trim(strip_tags($cleanContent));
         if (mb_strlen($plainText) < 100) {
