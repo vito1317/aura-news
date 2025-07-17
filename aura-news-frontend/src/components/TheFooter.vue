@@ -11,7 +11,7 @@
           <div class="flex space-x-6 md:order-2">
           </div>
           <p class="mt-8 text-base text-gray-400 md:mt-0 md:order-1">
-            © {{ new Date().getFullYear() }} Aura News. All Rights Reserved Powered by vito1317.
+            © {{ new Date().getFullYear() }} Aura News. All Rights Reserved Powered by <a href="https://vito1317.com" target="_blank" class="text-blue-500">vito1317</a>.
           </p>
         </div>
       </div>
