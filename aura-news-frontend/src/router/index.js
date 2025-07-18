@@ -38,6 +38,11 @@ const router = createRouter({
       name: 'login',
       component: () => import('../views/LoginView.vue')
     },
+    {
+      path: '/ai-scan-fake-news',
+      name: 'ai-scan-fake-news',
+      component: () => import('../views/AIScanFakeNewsView.vue')
+    },
 
     {
       path: '/admin',

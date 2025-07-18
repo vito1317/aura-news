@@ -32,6 +32,10 @@ Route::get('/test-cors', function () {
     return response('CORS OK')->header('Access-Control-Allow-Origin', '*');
 });
 
+Route::post('/ai/scan-fake-news', [\App\Http\Controllers\Api\AIScanFakeNewsController::class, 'scan']);
+Route::post('/ai/scan-fake-news/start', [\App\Http\Controllers\Api\AIScanFakeNewsController::class, 'start']);
+Route::get('/ai/scan-fake-news/progress/{taskId}', [\App\Http\Controllers\Api\AIScanFakeNewsController::class, 'progress']);
+
 Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->name('admin.')->group(function () {
     Route::get('/stats', [DashboardController::class, 'getStats']);
     Route::post('/images/upload', [ImageUploadController::class, 'upload']);
