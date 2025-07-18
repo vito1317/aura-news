@@ -15,6 +15,7 @@ const fetch = require('node-fetch');
 
   const links = [
     { url: '/', changefreq: 'daily', priority: 1.0 },
+    { url: '/ai-scan-fake-news', changefreq: 'weekly', priority: 0.9 }, // AI 假新聞查證頁
     ...articles.map(article => ({
       url: `/articles/${article.id}`,
       changefreq: 'weekly',

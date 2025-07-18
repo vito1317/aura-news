@@ -4,9 +4,9 @@ composer install --no-interaction --prefer-dist --optimize-autoloader
 php artisan storage:link
 php artisan key:generate
 php artisan migrate --force
-php artisan config:cache
 php artisan route:cache
 php artisan view:cache
+php artisan config:cache
 
 cd /var/www/aura-news/aura-news-frontend
 npm install --legacy-peer-deps
