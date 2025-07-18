@@ -14,7 +14,7 @@ useHead({
     { property: 'og:title', content: 'Aura News - AI 新聞平台' },
     { property: 'og:description', content: 'Aura News - AI 新聞平台，最新、最即時的新聞內容。' },
     { property: 'og:type', content: 'website' },
-    { property: 'og:image', content: '/favicon.ico' },
+    { property: 'og:image', content: '/aura-news.png' },
     { property: 'og:url', content: typeof window !== 'undefined' ? window.location.href : '' },
     { name: 'twitter:card', content: 'summary_large_image' }
   ]

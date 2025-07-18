@@ -23,15 +23,19 @@ onMounted(async () => {
   try {
     const response = await axios.get('/api/categories');
     const homeLink = { name: '首頁', path: '/', slug: null };
+    const aiScanLink = { name: 'AI 假新聞查證', path: '/ai-scan-fake-news', slug: 'ai-scan-fake-news' };
     const categoryLinks = response.data.map(cat => ({
       name: cat.name,
       path: `/category/${cat.slug}`,
       slug: cat.slug,
     }));
-    navLinks.value = [homeLink, ...categoryLinks];
+    navLinks.value = [homeLink, aiScanLink, ...categoryLinks];
   } catch (error) {
     console.error('無法載入導覽列分類:', error);
-    navLinks.value = [{ name: '首頁', path: '/', slug: null }];
+    navLinks.value = [
+      { name: '首頁', path: '/', slug: null },
+      { name: 'AI 假新聞查證', path: '/ai-scan-fake-news', slug: 'ai-scan-fake-news' }
+    ];
   }
 });
 </script>
@@ -49,7 +53,7 @@ onMounted(async () => {
           <RouterLink
             v-for="link in navLinks"
             :key="link.name"
-            :to="link.slug ? { name: 'category', params: { slug: link.slug } } : '/'"
+            :to="link.slug ? link.path : link.path"
             class="text-gray-600 hover:text-brand-DEFAULT px-4 py-2 rounded-md text-sm font-medium transition-colors"
             active-class="text-brand-DEFAULT font-semibold"
           >
@@ -105,7 +109,7 @@ onMounted(async () => {
           <RouterLink
             v-for="link in navLinks"
             :key="link.name"
-            :to="link.slug ? { name: 'category', params: { slug: link.slug } } : '/'"
+            :to="link.slug ? link.path : link.path"
             class="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-white hover:bg-brand-DEFAULT"
             active-class="bg-brand-light text-brand-dark"
           >

@@ -179,7 +179,7 @@ useHead({
     { property: 'og:title', content: 'AI 假新聞查證｜Aura News - 即時可信度分析' },
     { property: 'og:description', content: 'Aura News AI 假新聞查證工具，支援網址或主文內容輸入，AI 即時分析可信度、查證出處，提供最即時的新聞真偽判斷。' },
     { property: 'og:type', content: 'website' },
-    { property: 'og:image', content: '/favicon.ico' },
+    { property: 'og:image', content: '/aura-news.png' },
     { property: 'og:url', content: typeof window !== 'undefined' ? window.location.href : '' },
     { name: 'twitter:card', content: 'summary_large_image' }
   ]
