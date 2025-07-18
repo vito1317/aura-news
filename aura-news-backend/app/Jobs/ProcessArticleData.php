@@ -117,7 +117,8 @@ class ProcessArticleData implements ShouldQueue
 
             $gemini = resolve(GeminiClient::class);
             // AI 先根據全文生成完整內容（Markdown），主體包在 <!--start--> 和 <!--end--> 標記
-            $prompt = "請根據以下新聞全文，撰寫一篇約 500 字的完整新聞內容，並以 Markdown 格式輸出，請使用繁體中文。請將主體內容包在 <!--start--> 和 <!--end--> 標記之間：\n\n" . $plainText;
+            $now = now()->setTimezone('Asia/Taipei')->format('Y-m-d H:i');
+            $prompt = "現在時間為 {$now}（UTC+8）。請根據以下新聞全文，撰寫一篇約 500 字的完整新聞內容，並以 Markdown 格式輸出，請使用繁體中文。請將主體內容包在 <!--start--> 和 <!--end--> 標記之間：\n\n" . $plainText;
             $result = $gemini->generativeModel('gemini-2.5-flash-lite-preview-06-17')->generateContent($prompt);
             $markdownContent = $result->text();
             // 只保留 <!--start--> 和 <!--end--> 之間的內容
