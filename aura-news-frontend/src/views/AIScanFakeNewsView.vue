@@ -35,7 +35,7 @@ const steps = computed(() => {
     return [
       '分析網址',
       'AI 產生搜尋關鍵字',
-      '站內新聞搜尋',
+      '新聞資料搜尋',
       'AI 綜合查證',
       '完成',
     ];
@@ -43,7 +43,7 @@ const steps = computed(() => {
     return [
       '分析內容',
       'AI 產生搜尋關鍵字',
-      '站內新聞搜尋',
+      '新聞資料搜尋',
       'AI 綜合查證',
       '完成',
     ];
@@ -53,7 +53,7 @@ const currentStep = computed(() => {
   const p = progress.value || '';
   if (p === '完成') return steps.value.length - 1;
   if (p.includes('AI 綜合查證')) return 3;
-  if (p.includes('站內搜尋')) return 2;
+  if (p.includes('新聞資料搜尋') || p.includes('站內搜尋')) return 2;
   if (p.includes('AI 產生搜尋關鍵字')) return 1;
   if (p.includes('抓取主文') || p.includes('查看新聞') || p.includes('分析網址') || p.includes('分析內容')) return 0;
   return 0;

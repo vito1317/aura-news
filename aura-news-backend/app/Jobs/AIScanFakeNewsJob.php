@@ -119,19 +119,6 @@ class AIScanFakeNewsJob implements ShouldQueue
             $plainText = trim($this->content);
         }
 
-        // 新增：AI 判斷是否為新聞
-        $gemini = resolve(GeminiClient::class);
-        $newsCheckPrompt = "請判斷以下內容是否為一則新聞，僅回覆 '是' 或 '否'，不要有其他說明：\n\n" . $plainText;
-        $newsCheckResult = $gemini->generativeModel('gemini-2.5-flash-lite-preview-06-17')->generateContent($newsCheckPrompt);
-        $isNews = trim($newsCheckResult->text());
-        if ($isNews !== '是') {
-            Cache::put("ai_scan_progress_{$this->taskId}", [
-                'progress' => '此內容非新聞，請確認輸入',
-                'result' => null,
-            ], 600);
-            return;
-        }
-
         // 若主文擷取失敗或內容過短，給予提示並結束
         if (!$plainText || $plainText === '內容抓取失敗。' || mb_strlen($plainText) < 300) {
             \Log::warning('AIScanFakeNewsJob failed', [
@@ -163,16 +150,48 @@ class AIScanFakeNewsJob implements ShouldQueue
         $searchKeyword = implode(' ', array_slice($keywordsArr, 0, 5));
 
         Cache::put("ai_scan_progress_{$this->taskId}", [
-            'progress' => '正在站內搜尋資料',
+            'progress' => '正在搜尋新聞資料',
             'result' => null,
         ], 600);
         sleep(1);
+        // 1. 站內新聞搜尋
         $articles = Article::search($searchKeyword)->take(3)->get();
         $searchText = '';
         foreach ($articles as $idx => $article) {
-            $searchText .= ($idx+1) . ". 標題：" . $article->title . "\n";
+            $searchText .= ($idx+1) . ". [站內] 標題：" . $article->title . "\n";
             $searchText .= "摘要：" . ($article->summary ?: mb_substr(strip_tags($article->content),0,100)) . "\n";
-            $searchText .= "---\n";
+            $searchText .= "來源：" . ($article->source_url ?? '') . "\n---\n";
+        }
+        // 2. NewsAPI 全網新聞搜尋
+        $newsApiKey = env('NEWS_API_KEY');
+        $newsApiUrl = 'https://newsapi.org/v2/everything';
+        if ($newsApiKey) {
+            try {
+                $newsResponse = (new \GuzzleHttp\Client())->get($newsApiUrl, [
+                    'query' => [
+                        'q' => $searchKeyword,
+                        'language' => 'zh',
+                        'sortBy' => 'publishedAt',
+                        'apiKey' => $newsApiKey,
+                        'pageSize' => 3,
+                    ],
+                    'timeout' => 10,
+                    'verify' => false,
+                ]);
+                $newsData = json_decode($newsResponse->getBody(), true);
+                if (!empty($newsData['articles'])) {
+                    foreach ($newsData['articles'] as $idx => $article) {
+                        $searchText .= ($idx+1) . ". [全網] 標題：" . $article['title'] . "\n";
+                        $searchText .= "摘要：" . ($article['description'] ?? '') . "\n";
+                        $searchText .= "來源：" . ($article['url'] ?? '') . "\n---\n";
+                    }
+                }
+            } catch (\Exception $e) {
+                \Log::error('NewsAPI 查詢失敗', [
+                    'taskId' => $this->taskId,
+                    'error' => $e->getMessage(),
+                ]);
+            }
         }
         if (!$searchText) {
             $searchText = '（查無相關新聞）';
