@@ -4,8 +4,58 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "bde23f232f950cd8121991c515201138",
+    "content-hash": "25136c85d7d4bdbee05feeb022acc534",
     "packages": [
+        {
+            "name": "aleszatloukal/google-search-api",
+            "version": "1.0.0",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/aleszatloukal/google-search-api.git",
+                "reference": "544dd3e7f4f1f2e7f1163945ceab3b6ae9b28792"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/aleszatloukal/google-search-api/zipball/544dd3e7f4f1f2e7f1163945ceab3b6ae9b28792",
+                "reference": "544dd3e7f4f1f2e7f1163945ceab3b6ae9b28792",
+                "shasum": ""
+            },
+            "require": {
+                "illuminate/support": ">=5.0.0",
+                "php": ">=7.1.0"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-0": {
+                    "AlesZatloukal\\GoogleSearchApi": "src/"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Aleš Zatloukal",
+                    "email": "al.zatloukal@gmail.com"
+                }
+            ],
+            "description": "Laravel package to get Google Custom Search results from Google Custom Search Engine API for both free and paid version.",
+            "homepage": "https://github.com/aleszatloukal/google-search-api",
+            "keywords": [
+                "custom",
+                "engine",
+                "google",
+                "laravel",
+                "search"
+            ],
+            "support": {
+                "email": "al.zatloukal@gmail.com",
+                "issues": "https://github.com/aleszatloukal/google-search-api/issues",
+                "source": "https://github.com/aleszatloukal/google-search-api/archive/master.zip"
+            },
+            "time": "2019-12-11T11:03:10+00:00"
+        },
         {
             "name": "andreskrey/readability.php",
             "version": "v1.0.0",

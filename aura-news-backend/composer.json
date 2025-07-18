@@ -7,6 +7,7 @@
     "license": "MIT",
     "require": {
         "php": "^8.2",
+        "aleszatloukal/google-search-api": "^1.0",
         "andreskrey/readability.php": "^1.0",
         "danielstjules/stringy": "^3.1",
         "fivefilters/readability.php": "*",

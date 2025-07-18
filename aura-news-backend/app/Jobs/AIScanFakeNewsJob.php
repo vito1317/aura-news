@@ -13,6 +13,7 @@ use GuzzleHttp\Client as GuzzleClient;
 use andreskrey\Readability\Readability;
 use App\Models\Article;
 use andreskrey\Readability\Configuration;
+use AlesZatloukal\GoogleSearchApi\GoogleSearchApi;
 
 class AIScanFakeNewsJob implements ShouldQueue
 {
@@ -193,6 +194,41 @@ class AIScanFakeNewsJob implements ShouldQueue
                 ]);
             }
         }
+        // 3. Google Custom Search
+        $googleSearchText = '';
+        try {
+            \Log::info('GoogleSearchApi config debug', [
+                'engineId' => config('googlesearchapi.google_search_engine_id'),
+                'apiKey' => config('googlesearchapi.google_search_api_key'),
+            ]);
+            $client = new \GuzzleHttp\Client();
+            $response = $client->get('https://www.googleapis.com/customsearch/v1', [
+                'query' => [
+                    'key' => config('googlesearchapi.google_search_api_key'),
+                    'cx' => config('googlesearchapi.google_search_engine_id'),
+                    'q' => $searchKeyword,
+                    'num' => 3,
+                    'lr' => 'lang_zh-TW',
+                    'safe' => 'off',
+                ],
+                'timeout' => 10,
+                'verify' => false,
+            ]);
+            $googleData = json_decode($response->getBody(), true);
+            if (!empty($googleData['items'])) {
+                foreach ($googleData['items'] as $idx => $item) {
+                    $googleSearchText .= ($idx+1) . ". [Google] 標題：" . $item['title'] . "\n";
+                    $googleSearchText .= "摘要：" . ($item['snippet'] ?? '') . "\n";
+                    $googleSearchText .= "來源：" . ($item['link'] ?? '') . " \n---\n";
+                }
+            }
+        } catch (\Exception $e) {
+            \Log::error('Google Search API 查詢失敗', [
+                'taskId' => $this->taskId,
+                'error' => $e->getMessage(),
+            ]);
+        }
+        $searchText .= $googleSearchText;
         if (!$searchText) {
             $searchText = '（查無相關新聞）';
         }
@@ -202,7 +238,8 @@ class AIScanFakeNewsJob implements ShouldQueue
             'progress' => 'AI 綜合查證中',
             'result' => null,
         ], 600);
-        $prompt = "請參考下列站內新聞資料，針對用戶輸入的內容（主文已用【主文開始】與【主文結束】標記）進行查證，並以繁體中文簡要說明查證過程與理由，最後請獨立一行以【可信度：xx%】格式標示可信度，再給出建議。請將主文原文用【主文開始】與【主文結束】標記包住。所有網址連結結束處請加上一個空格。請在回應最後以【查證出處】區塊列出所有引用的網站、新聞來源或資料連結。\n\n【站內新聞資料】\n" . $searchText . "\n【用戶輸入】\n" . $plainTextMarked . "\n\n---\n資料來源：" . (preg_match('/^https?:\/\//i', trim($this->content)) ? $this->content : '用戶貼上主文') . "\n站內新聞查詢關鍵字：" . $searchKeyword;
+        $nowTime = now()->setTimezone('Asia/Taipei')->format('Y-m-d H:i');
+        $prompt = "請參考下列新聞資料，針對用戶輸入的內容（主文已用【主文開始】與【主文結束】標記）進行查證，並以繁體中文簡要說明查證過程與理由，最後請獨立一行以【可信度：xx%】格式標示可信度，再給出建議。請將主文原文用【主文開始】與【主文結束】標記包住。所有網址連結結束處請加上一個空格。請在回應最後以**【查證出處】**區塊列出所有引用的網站、新聞來源或資料連結。\n\n【查證時間：{$nowTime}】\n\n【新聞資料】\n" . $searchText . "\n【用戶輸入】\n" . $plainTextMarked . "\n\n---\n資料來源：" . (preg_match('/^https?:\/\//i', trim($this->content)) ? $this->content : '用戶貼上主文') . "\n查證關鍵字：" . $searchKeyword;
         $result = $gemini->generativeModel('gemini-2.5-flash-lite-preview-06-17')->generateContent($prompt);
         $aiText = $result->text();
 
