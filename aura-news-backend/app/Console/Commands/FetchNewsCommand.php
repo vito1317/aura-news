@@ -86,7 +86,7 @@ class FetchNewsCommand extends Command
                 'category_id' => $category->id,
                 'author' => $fetchedArticle['source']['name'] ?? '未知來源',
                 'status' => 1,
-                'published_at' => Carbon::parse($fetchedArticle['publishedAt']),
+                'published_at' => Carbon::parse($fetchedArticle['publishedAt'])->setTimezone('Asia/Taipei'),
             ]);
             dispatch(new \App\Jobs\ProcessArticleData($article));
             $count++;
