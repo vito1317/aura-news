@@ -23,7 +23,6 @@ const searchArticles = async (searchQuery) => {
   }
 };
 
-// 進頁面時主動檢查 query
 onMounted(() => {
   if (query.value) {
     useHead({
@@ -41,7 +40,6 @@ onMounted(() => {
   }
 });
 
-// 監聽路由變化
 watch(() => route.query.q, (newQuery) => {
   if (newQuery && newQuery !== query.value) {
     query.value = newQuery;
