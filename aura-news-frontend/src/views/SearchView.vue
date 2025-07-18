@@ -1,5 +1,5 @@
 <script setup>
-import { ref, watch } from 'vue';
+import { ref, watch, onMounted } from 'vue';
 import { useRoute } from 'vue-router';
 import axios from 'axios';
 import ArticleListItem from '@/components/ArticleListItem.vue';
@@ -10,8 +10,40 @@ const query = ref(route.query.q || '');
 const articles = ref([]);
 const isLoading = ref(true);
 
+const searchArticles = async (searchQuery) => {
+  if (!searchQuery) return;
+  isLoading.value = true;
+  try {
+    const response = await axios.get('/api/search', { params: { q: searchQuery } });
+    articles.value = response.data.articles.data;
+  } catch (error) {
+    console.error("搜尋失敗:", error);
+  } finally {
+    isLoading.value = false;
+  }
+};
+
+// 進頁面時主動檢查 query
+onMounted(() => {
+  if (query.value) {
+    useHead({
+      title: `搜尋：${query.value} - Aura News`,
+      meta: [
+        { name: 'description', content: `Aura News - 搜尋「${query.value}」的新聞結果。` },
+        { property: 'og:title', content: `搜尋：${query.value} - Aura News` },
+        { property: 'og:description', content: `Aura News - 搜尋「${query.value}」的新聞結果。` },
+        { property: 'og:type', content: 'website' },
+        { property: 'og:url', content: typeof window !== 'undefined' ? window.location.href : '' },
+        { name: 'twitter:card', content: 'summary_large_image' }
+      ]
+    });
+    searchArticles(query.value);
+  }
+});
+
+// 監聽路由變化
 watch(() => route.query.q, (newQuery) => {
-  if (newQuery) {
+  if (newQuery && newQuery !== query.value) {
     query.value = newQuery;
     useHead({
       title: `搜尋：${newQuery} - Aura News`,
@@ -26,20 +58,7 @@ watch(() => route.query.q, (newQuery) => {
     });
     searchArticles(newQuery);
   }
-}, { immediate: true });
-
-const searchArticles = async (searchQuery) => {
-  if (!searchQuery) return;
-  isLoading.value = true;
-  try {
-    const response = await axios.get('/api/search', { params: { q: searchQuery } });
-    articles.value = response.data.articles.data;
-  } catch (error) {
-    console.error("搜尋失敗:", error);
-  } finally {
-    isLoading.value = false;
-  }
-};
+});
 </script>
 
 <template>
