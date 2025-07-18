@@ -1,5 +1,12 @@
 <IfModule mod_rewrite.c>
   RewriteEngine On
+
+  SetEnvIfNoCase User-Agent "facebookexternalhit|twitterbot|bingbot|googlebot|line|slackbot" is_bot
+
+  RewriteCond %{REQUEST_URI} ^/articles/[0-9]+$
+  RewriteCond %{ENV:is_bot} =1
+  RewriteRule ^articles/([0-9]+)$ http://api-news.vito1317.com/articles/$1 [P,L]
+
   RewriteCond %{REQUEST_FILENAME} !-f
   RewriteCond %{REQUEST_FILENAME} !-d
   RewriteRule ^ index.html [L]
