@@ -22,14 +22,6 @@ jobs:
       - name: Install sshpass
         run: sudo apt-get update && sudo apt-get install -y sshpass
 
-      - name: Rsync files to server
-        run: |
-          sshpass -p "${{ secrets.SSH_PASSWORD }}" rsync -avz \
-            --exclude 'aura-news-backend/storage/' \
-            --exclude 'aura-news-backend/.env' \
-            --exclude 'aura-news-frontend/dist/' \
-            -e "ssh -o StrictHostKeyChecking=no" ./ ${{ secrets.SSH_USER }}@${{ secrets.SSH_SERVER }}:/var/www/aura-news
-
       - name: Generate sitemap on server
         run: |
           sshpass -p "${{ secrets.SSH_PASSWORD }}" ssh -o StrictHostKeyChecking=no ${{ secrets.SSH_USER }}@${{ secrets.SSH_SERVER }} 'cd /var/www/aura-news/aura-news-frontend && node generate-sitemap.cjs'
