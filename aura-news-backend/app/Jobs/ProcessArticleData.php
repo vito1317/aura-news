@@ -68,7 +68,6 @@ class ProcessArticleData implements ShouldQueue
                 \Log::info('Purifier 清理後: ' . mb_substr($cleanContent, 0, 1000));
             } else {
                 \Log::warning("XPath 沒抓到內容: " . $finalUrl);
-                // 嘗試用 Readability 萃取主文
                 try {
                     $readability = new Readability($html, $finalUrl);
                     $result = $readability->init();
@@ -85,7 +84,6 @@ class ProcessArticleData implements ShouldQueue
                 }
             }
 
-            // Yahoo News 特殊處理：只抓 div.atoms 內所有 <p> 的純文字
             if (preg_match('/https?:\/\/(?:[\w-]+\.)*yahoo\.com\//i', $finalUrl)) {
                 \Log::info('Yahoo News 特殊處理: 只擷取 div.atoms 內所有 <p>');
                 $atomsDiv = $xpath->query('//*[contains(@class, "atoms")]')->item(0);
@@ -102,13 +100,11 @@ class ProcessArticleData implements ShouldQueue
                 }
             }
 
-            // fallback: 如果 XPath/Readability 都沒抓到，回原本 content
             if (empty($cleanContent) || trim(strip_tags($cleanContent)) === '') {
                 \Log::warning('主文擷取失敗，fallback 回原本 content: ' . $this->article->content);
                 $cleanContent = $this->article->content ?? '內容抓取失敗。';
             }
 
-            // 若全文過短則略過 AI 生成
             $plainText = trim(strip_tags($cleanContent));
             if (mb_strlen($plainText) < 100) {
                 \Log::warning('新聞全文過短，略過 AI 生成，article ID: ' . $this->article->id);
@@ -116,18 +112,15 @@ class ProcessArticleData implements ShouldQueue
             }
 
             $gemini = resolve(GeminiClient::class);
-            // AI 先根據全文生成完整內容（Markdown），主體包在 <!--start--> 和 <!--end--> 標記
             $now = now()->setTimezone('Asia/Taipei')->format('Y-m-d H:i');
             $prompt = "現在時間為 {$now}（UTC+8）。請根據以下新聞全文，撰寫一篇約 500 字的完整新聞內容，並以 Markdown 格式輸出，請使用繁體中文。請將主體內容包在 <!--start--> 和 <!--end--> 標記之間：\n\n" . $plainText;
             $result = $gemini->generativeModel('gemini-2.5-flash-lite-preview-06-17')->generateContent($prompt);
             $markdownContent = $result->text();
-            // 只保留 <!--start--> 和 <!--end--> 之間的內容
             if (preg_match('/<!--start-->(.*?)<!--end-->/s', $markdownContent, $matches)) {
                 $markdownContent = trim($matches[1]);
             }
             $this->article->content = $markdownContent;
 
-            // 再根據 AI 生成的內容產生摘要
             $prompt = "請將以下新聞內容，整理成一段約 150 字的精簡摘要，請使用繁體中文：\n\n" . strip_tags($this->article->content);
             $result = $gemini->generativeModel('gemini-2.5-flash-lite-preview-06-17')->generateContent($prompt);
             $this->article->summary = $result->text();
