@@ -1,12 +1,15 @@
 <IfModule mod_rewrite.c>
   RewriteEngine On
 
-  SetEnvIfNoCase User-Agent "facebookexternalhit|twitterbot|bingbot|googlebot|line|slackbot" is_bot
+  # 更精確的爬蟲 user-agent 判斷
+  SetEnvIfNoCase User-Agent "facebookexternalhit|twitterbot|bingbot|googlebot|slackbot|LineBot|Line-Bot|LineBotWebhook" is_bot
 
+  # 只有爬蟲才 proxy 到 SSR
   RewriteCond %{REQUEST_URI} ^/articles/[0-9]+$
   RewriteCond %{ENV:is_bot} =1
   RewriteRule ^articles/([0-9]+)$ http://api-news.vito1317.com/articles/$1 [P,L]
 
+  # 其他所有情況（包含一般用戶）都 fallback 到 index.html
   RewriteCond %{REQUEST_FILENAME} !-f
   RewriteCond %{REQUEST_FILENAME} !-d
   RewriteRule ^ index.html [L]
