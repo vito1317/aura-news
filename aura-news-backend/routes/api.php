@@ -29,12 +29,10 @@ Route::get('/categories/{category}/articles', [ArticleSearchController::class, '
 Route::get('/search', [ArticleSearchController::class, 'search']);
 Route::get('/categories', [CategoryController::class, 'index'])->name('categories.index');
 
-// 文章可信度相關路由 - 必須放在通用文章路由之前
 Route::get('/articles/{articleId}/credibility', [ArticleCredibilityController::class, 'getCredibility']);
 Route::post('/articles/{articleId}/credibility/analyze', [ArticleCredibilityController::class, 'triggerAnalysis']);
 Route::get('/articles/credibility/progress/{taskId}', [ArticleCredibilityController::class, 'getAnalysisProgress']);
 
-// 通用文章路由 - 放在可信度路由之後
 Route::get('/articles/{article}', [ArticleController::class, 'show']);
 
 Route::get('/test-cors', function () {
@@ -45,7 +43,6 @@ Route::post('/ai/scan-fake-news', [\App\Http\Controllers\Api\AIScanFakeNewsContr
 Route::post('/ai/scan-fake-news/start', [\App\Http\Controllers\Api\AIScanFakeNewsController::class, 'start']);
 Route::get('/ai/scan-fake-news/progress/{taskId}', [\App\Http\Controllers\Api\AIScanFakeNewsController::class, 'progress']);
 
-// NewsData API 路由
 Route::get('/newsdata/search', [NewsDataController::class, 'search']);
 Route::get('/newsdata/latest', [NewsDataController::class, 'latest']);
 Route::get('/newsdata/categories', [NewsDataController::class, 'categories']);

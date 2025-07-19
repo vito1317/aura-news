@@ -12,14 +12,12 @@ const article = ref(null);
 const isLoading = ref(true);
 const error = ref(null);
 
-// 可信度相關狀態
 const credibilityData = ref(null);
 const isAnalyzing = ref(false);
 const analysisProgress = ref('');
 const analysisError = ref(null);
 let pollingInterval = null;
 
-// 動畫相關狀態
 const credibilitySectionRef = ref(null);
 const isCredibilitySectionVisible = ref(false);
 const hasAnimationStarted = ref(false);
@@ -39,7 +37,6 @@ const safeContent = computed(() => {
   return '';
 });
 
-// 可信度相關計算屬性
 const credibilityScore = computed(() => {
   return credibilityData.value?.credibility_score || null;
 });
@@ -65,7 +62,6 @@ const safeCredibilityAnalysis = computed(() => {
   if (credibilityData.value?.credibility_analysis) {
     let text = credibilityData.value.credibility_analysis;
     
-    // 先處理查證出處區塊
     const sourceMatch = text.match(/【查證出處】([\s\S]*)$/);
     if (sourceMatch) {
       const sourceContent = sourceMatch[1];
@@ -80,7 +76,6 @@ const safeCredibilityAnalysis = computed(() => {
       text = text.replace(sourceMatch[0], `【查證出處】${formattedSources}`);
     }
     
-    // 處理其他 URL（排除已經處理過的 Markdown 連結）
     text = text.replace(
       /(?<!\[)(https?:\/\/[^\s<>"{}|\\^`\[\]]+)(?!\])/g,
       (url) => {
@@ -90,10 +85,8 @@ const safeCredibilityAnalysis = computed(() => {
       }
     );
     
-    // 轉換為 HTML
     let html = marked.parse(text);
     
-    // 為所有連結添加額外的 CSS 類別
     html = html.replace(
       /<a href="([^"]+)">([^<]+)<\/a>/g,
       '<a href="$1" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:text-blue-800 underline break-all hover:whitespace-normal" title="$1">$2</a>'
@@ -135,7 +128,6 @@ watch(article, (val) => {
   }
 });
 
-// 監聽可信度數據變化，確保在數據載入後設置 Observer
 watch(credibilityData, (val) => {
   if (val && credibilitySectionRef.value && !hasAnimationStarted.value) {
     setupCredibilityAnimationObserver();
@@ -173,7 +165,6 @@ const webShare = async () => {
   }
 };
 
-// 獲取可信度分析結果
 const fetchCredibility = async () => {
   if (!article.value) return;
   
@@ -182,7 +173,6 @@ const fetchCredibility = async () => {
     credibilityData.value = response.data;
   } catch (err) {
     if (err.response?.status === 404) {
-      // 文章沒有可信度分析，這是正常的
       credibilityData.value = null;
     } else {
       console.error('可信度分析獲取失敗:', err);
@@ -190,7 +180,6 @@ const fetchCredibility = async () => {
   }
 };
 
-// 觸發可信度分析
 const triggerCredibilityAnalysis = async () => {
   if (!article.value || isAnalyzing.value) return;
   
@@ -213,14 +202,12 @@ const triggerCredibilityAnalysis = async () => {
   }
 };
 
-// 輪詢分析進度
 const pollAnalysisProgress = (taskId) => {
   pollingInterval = setInterval(async () => {
     try {
       const response = await axios.get(`https://api-news.vito1317.com/api/articles/credibility/progress/${taskId}`);
       
       if (response.data.progress === '完成' && response.data.result) {
-        // 分析完成，重新獲取可信度結果
         clearInterval(pollingInterval);
         pollingInterval = null;
         isAnalyzing.value = false;
@@ -236,7 +223,7 @@ const pollAnalysisProgress = (taskId) => {
       }
     } catch (err) {
       if (err.response?.status === 404) {
-        return; // 繼續輪詢
+        return;
       }
       clearInterval(pollingInterval);
       pollingInterval = null;
@@ -252,17 +239,13 @@ onMounted(async () => {
     const response = await axios.get(`https://api-news.vito1317.com/api/articles/${articleId}`);
     article.value = response.data;
     
-    // 獲取可信度分析結果
     await fetchCredibility();
     
-    // 等待 DOM 更新後設置 Intersection Observer
     await nextTick();
     
-    // 確保可信度區塊已經渲染
     if (credibilitySectionRef.value) {
       setupCredibilityAnimationObserver();
     } else {
-      // 如果還沒渲染，等待更長時間
       setTimeout(() => {
         if (credibilitySectionRef.value) {
           setupCredibilityAnimationObserver();
@@ -276,7 +259,6 @@ onMounted(async () => {
     isLoading.value = false;
   }
   
-  // 額外的檢查：在組件完全掛載後再次檢查
   setTimeout(() => {
     if (credibilitySectionRef.value && !hasAnimationStarted.value) {
       setupCredibilityAnimationObserver();
@@ -284,13 +266,11 @@ onMounted(async () => {
   }, 2000);
 });
 
-// 設置可信度動畫觀察器
 const setupCredibilityAnimationObserver = () => {
   if (!credibilitySectionRef.value) {
     return;
   }
   
-  // 簡化的觸發動畫函數
   const triggerAnimation = () => {
     if (hasAnimationStarted.value) return;
     
@@ -310,21 +290,19 @@ const setupCredibilityAnimationObserver = () => {
       });
     },
     {
-      threshold: 0.1, // 當 10% 的區塊可見時觸發
-      rootMargin: '0px 0px -150px 0px' // 提前 150px 觸發
+      threshold: 0.1,
+      rootMargin: '0px 0px -150px 0px'
     }
   );
   
   observer.observe(credibilitySectionRef.value);
   
-  // 滾動監聽器
   const handleScroll = () => {
     if (hasAnimationStarted.value) return;
     
     const rect = credibilitySectionRef.value.getBoundingClientRect();
     const windowHeight = window.innerHeight;
     
-    // 當區塊進入視窗底部 200px 範圍內時觸發
     if (rect.top < windowHeight - 200 && rect.bottom > 0) {
       triggerAnimation();
       window.removeEventListener('scroll', handleScroll);
@@ -333,7 +311,6 @@ const setupCredibilityAnimationObserver = () => {
   
   window.addEventListener('scroll', handleScroll);
   
-  // 立即檢查一次
   setTimeout(() => {
     const rect = credibilitySectionRef.value.getBoundingClientRect();
     const windowHeight = window.innerHeight;
@@ -343,28 +320,12 @@ const setupCredibilityAnimationObserver = () => {
     }
   }, 500);
   
-  // 移除強制觸發動畫功能
-  // setTimeout(() => {
-  //   if (!hasAnimationStarted.value && credibilityData.value?.has_analysis) {
-  //     console.log('2秒後強制觸發動畫');
-  //     triggerAnimation();
-  //   }
-  // }, 2000);
-  
-  // 在組件卸載時清理
   onUnmounted(() => {
     observer.disconnect();
     window.removeEventListener('scroll', handleScroll);
   });
 };
 
-// 移除測試動畫函數
-
-// 移除檢查可見性函數
-
-// 移除重置動畫函數
-
-// 組件卸載時清理輪詢
 onUnmounted(() => {
   if (pollingInterval) {
     clearInterval(pollingInterval);
@@ -421,7 +382,6 @@ const formatDate = (dateString) => {
           v-html="safeContent">
         </div>
 
-        <!-- 可信度分析區塊 -->
         <div 
           ref="credibilitySectionRef"
           class="mt-12 p-6 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl border border-blue-200"
@@ -448,21 +408,17 @@ const formatDate = (dateString) => {
             </div>
           </div>
 
-          <!-- 分析中狀態 -->
           <div v-if="isAnalyzing" class="text-center py-8">
             <div class="animate-spin w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full mx-auto mb-4"></div>
             <p class="text-blue-700 font-medium">{{ analysisProgress || '正在分析中...' }}</p>
             <p class="text-sm text-gray-500 mt-2">AI 正在查證新聞內容，請稍候</p>
           </div>
 
-          <!-- 錯誤狀態 -->
           <div v-else-if="analysisError" class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
             <p class="font-medium">{{ analysisError }}</p>
           </div>
 
-          <!-- 可信度結果 -->
           <div v-else-if="credibilityData?.has_analysis" class="space-y-4">
-            <!-- 可信度分數半圓形圖標 -->
             <div class="flex justify-center">
               <div 
                 class="relative" 
@@ -470,10 +426,8 @@ const formatDate = (dateString) => {
                 style="width: 120px; height: 80px;"
               >
                 <svg width="120" height="80" viewBox="0 0 120 80">
-                  <!-- 背景半圓 -->
                   <path d="M 10 60 A 50 50 0 0 1 110 60" stroke="#f3f4f6" stroke-width="8" fill="none" stroke-linecap="round"/>
                   
-                  <!-- 進度半圓 -->
                   <path 
                     d="M 10 60 A 50 50 0 0 1 110 60" 
                     :stroke="credibilityColor" 
@@ -486,7 +440,6 @@ const formatDate = (dateString) => {
                     :class="{ 'progress-animation': isCredibilitySectionVisible }"
                   />
                   
-                  <!-- 中心勾號 -->
                   <path 
                     d="M 55 45 L 60 50 L 65 45" 
                     :stroke="credibilityColor" 
@@ -497,7 +450,6 @@ const formatDate = (dateString) => {
                     :class="{ 'check-animation': isCredibilitySectionVisible }"
                   />
                   
-                  <!-- 分數文字 -->
                   <text 
                     x="60" y="70" 
                     text-anchor="middle" 
@@ -513,7 +465,6 @@ const formatDate = (dateString) => {
               </div>
             </div>
 
-            <!-- 可信度等級 -->
             <div class="text-center">
               <span 
                 class="inline-block px-3 py-1 rounded-full text-sm font-medium transition-all duration-500" 
@@ -524,12 +475,10 @@ const formatDate = (dateString) => {
               </span>
             </div>
 
-            <!-- 分析時間 -->
             <div class="text-center text-sm text-gray-500">
               分析時間: {{ credibilityData.credibility_checked_at ? new Date(credibilityData.credibility_checked_at).toLocaleString('zh-TW') : '' }}
             </div>
 
-            <!-- 詳細分析內容 -->
             <div 
               v-if="safeCredibilityAnalysis" 
               class="mt-6 p-4 bg-white rounded-lg border transition-all duration-700"
@@ -540,14 +489,11 @@ const formatDate = (dateString) => {
             </div>
           </div>
 
-          <!-- 未分析狀態 -->
           <div v-else class="text-center py-8">
             <div class="w-16 h-16 mx-auto mb-4">
               <svg width="64" height="64" viewBox="0 0 64 64" class="text-gray-400">
-                <!-- 半圓形背景 - 更細緻的線條 -->
                 <path d="M 10 42 A 22 22 0 0 1 54 42" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" opacity="0.6"/>
                 
-                <!-- 問號圖標 - 進一步往下移動 -->
                 <path d="M 26 30 Q 26 26 32 26 Q 38 26 38 30 Q 38 34 32 38 L 32 42" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
                 <circle cx="32" cy="46" r="1.5" fill="currentColor"/>
               </svg>
@@ -588,21 +534,18 @@ const formatDate = (dateString) => {
   margin-bottom: 1em;
 }
 
-/* 可信度分析內容的 URL 處理 */
 .prose a {
   word-break: break-all;
   overflow-wrap: break-word;
   hyphens: auto;
 }
 
-/* 確保長 URL 不會超出容器 */
 .prose {
   overflow-wrap: break-word;
   word-wrap: break-word;
   word-break: break-word;
 }
 
-/* 查證出處區塊的特殊樣式 */
 .prose strong {
   display: block;
   margin-top: 1rem;
@@ -611,7 +554,6 @@ const formatDate = (dateString) => {
   color: #1f2937;
 }
 
-/* 列表項的 URL 處理 */
 .prose ul li a,
 .prose ol li a {
   display: inline-block;
@@ -631,12 +573,10 @@ const formatDate = (dateString) => {
   border-radius: 4px;
 }
 
-/* 查證出處區塊的特殊樣式 */
 .prose p:last-child {
   margin-bottom: 0;
 }
 
-/* 確保長 URL 在容器內正確換行 */
 .prose {
   max-width: 100%;
   overflow-wrap: break-word;
@@ -644,7 +584,6 @@ const formatDate = (dateString) => {
   word-break: break-word;
 }
 
-/* 可信度圖標動畫效果 */
 @keyframes credibilityPulse {
   0%, 100% {
     transform: scale(1);
@@ -660,13 +599,12 @@ const formatDate = (dateString) => {
   animation: credibilityPulse 2s ease-in-out infinite;
 }
 
-/* 半圓形進度條動畫 */
 @keyframes progressFill {
   from {
-    stroke-dashoffset: 157; /* Math.PI * 50 - 完全隱藏 */
+    stroke-dashoffset: 157;
   }
   to {
-    stroke-dashoffset: var(--final-offset, 0); /* 使用 CSS 變數 */
+    stroke-dashoffset: var(--final-offset, 0);
   }
 }
 
@@ -674,7 +612,6 @@ const formatDate = (dateString) => {
   animation: progressFill 1.5s ease-out forwards;
 }
 
-/* 確保進度條在沒有動畫時也能正常顯示 */
 path[class*="progress"]:not(.progress-animation) {
   stroke-dashoffset: 0;
 }
@@ -699,7 +636,6 @@ path[class*="progress"]:not(.progress-animation) {
   transform: translateY(30px);
 }
 
-/* 勾號動畫 */
 @keyframes checkDraw {
   from {
     stroke-dasharray: 0 20;
@@ -717,13 +653,11 @@ path[class*="progress"]:not(.progress-animation) {
   stroke-dashoffset: 20;
 }
 
-/* 確保勾號在沒有動畫時也能正常顯示 */
 path[class*="check"]:not(.check-animation) {
   stroke-dasharray: none;
   stroke-dashoffset: 0;
 }
 
-/* 分數文字動畫 */
 @keyframes scoreFadeIn {
   from {
     opacity: 0;
@@ -741,13 +675,11 @@ path[class*="check"]:not(.check-animation) {
   transform: scale(0.8);
 }
 
-/* 確保分數文字在沒有動畫時也能正常顯示 */
 text[class*="score"]:not(.score-animation) {
   opacity: 1;
   transform: scale(1);
 }
 
-/* 等級標籤動畫 */
 @keyframes levelSlideIn {
   from {
     opacity: 0;
@@ -765,13 +697,11 @@ text[class*="score"]:not(.score-animation) {
   transform: translateY(20px);
 }
 
-/* 確保等級標籤在沒有動畫時也能正常顯示 */
 span[class*="level"]:not(.level-animation) {
   opacity: 1;
   transform: translateY(0);
 }
 
-/* 詳細分析內容動畫 */
 @keyframes analysisFadeIn {
   from {
     opacity: 0;
@@ -787,11 +717,5 @@ span[class*="level"]:not(.level-animation) {
   animation: analysisFadeIn 0.8s ease-out 1.5s forwards;
   opacity: 0;
   transform: translateY(30px);
-}
-
-/* 確保詳細分析在沒有動畫時也能正常顯示 */
-div[class*="analysis"]:not(.analysis-animation) {
-  opacity: 1;
-  transform: translateY(0);
 }
 </style> 
