@@ -13,7 +13,7 @@ class NewsDataApiService
 
     public function __construct()
     {
-        $this->apiKey = env('NEWSDATA_API_KEY');
+        $this->apiKey = config('services.newsdata.key');
     }
 
     public function searchArticles($query, $language = 'zh', $pageSize = 20)

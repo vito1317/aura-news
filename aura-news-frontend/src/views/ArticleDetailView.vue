@@ -22,6 +22,10 @@ const credibilitySectionRef = ref(null);
 const isCredibilitySectionVisible = ref(false);
 const hasAnimationStarted = ref(false);
 
+const imageLoading = ref(false);
+const imageLoaded = ref(false);
+const imageError = ref(false);
+
 const safeSummary = computed(() => {
   if (article.value && article.value.summary) {
     const html = marked.parse(article.value.summary);
@@ -62,35 +66,18 @@ const safeCredibilityAnalysis = computed(() => {
   if (credibilityData.value?.credibility_analysis) {
     let text = credibilityData.value.credibility_analysis;
     
-    const sourceMatch = text.match(/【查證出處】([\s\S]*)$/);
-    if (sourceMatch) {
-      const sourceContent = sourceMatch[1];
-      const formattedSources = sourceContent.replace(
-        /(https?:\/\/[^\s<>"{}|\\^`\[\]]+)/g,
-        (url) => {
-          const cleanUrl = url.replace(/[),。！？；：\]\[\s]+$/g, '');
-          const displayUrl = cleanUrl.length > 50 ? cleanUrl.substring(0, 50) + '...' : cleanUrl;
-          return `[${displayUrl}](${cleanUrl})`;
-        }
-      );
-      text = text.replace(sourceMatch[0], `【查證出處】${formattedSources}`);
-    }
-    
+    // 直接將 URL 轉換為 HTML 連結，跳過 Markdown 解析
     text = text.replace(
-      /(?<!\[)(https?:\/\/[^\s<>"{}|\\^`\[\]]+)(?!\])/g,
+      /(https?:\/\/[^\s<>"{}|\\^`\[\]]+)/g,
       (url) => {
         const cleanUrl = url.replace(/[),。！？；：\]\[\s]+$/g, '');
         const displayUrl = cleanUrl.length > 60 ? cleanUrl.substring(0, 60) + '...' : cleanUrl;
-        return `[${displayUrl}](${cleanUrl})`;
+        return `<a href="${cleanUrl}" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:text-blue-800 underline break-all hover:whitespace-normal" title="${cleanUrl}">${displayUrl}</a>`;
       }
     );
     
+    // 解析其他 Markdown 內容（除了連結）
     let html = marked.parse(text);
-    
-    html = html.replace(
-      /<a href="([^"]+)">([^<]+)<\/a>/g,
-      '<a href="$1" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:text-blue-800 underline break-all hover:whitespace-normal" title="$1">$2</a>'
-    );
     
     return DOMPurify.sanitize(html);
   }
@@ -341,6 +328,19 @@ const formatDate = (dateString) => {
   }).replace(/\//g, '.'); 
 }
 
+const handleImageError = (event) => {
+  console.warn('圖片載入失敗:', event.target.src);
+  imageLoading.value = false;
+  imageLoaded.value = false;
+  imageError.value = true;
+};
+
+const handleImageLoad = (event) => {
+  imageLoading.value = false;
+  imageLoaded.value = true;
+  imageError.value = false;
+};
+
 
 </script>
 
@@ -363,11 +363,32 @@ const formatDate = (dateString) => {
           <span>|</span>
           <span>{{ formatDate(article.published_at) }}</span>
         </div>
-        <div class="mb-8 rounded-lg overflow-hidden shadow-lg">
+        <div class="mb-8 rounded-lg overflow-hidden shadow-lg relative w-full article-image-container">
+          <div v-if="!article.image_url" class="absolute inset-0 bg-gray-200 flex items-center justify-center">
+            <svg class="w-16 h-16 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
+          </div>
+          <!-- 主要圖片 -->
           <img
-            :src="article.image_url || noImage"
+            v-if="article.image_url && !imageError"
+            :src="article.image_url"
             :alt="article.title"
-            @error="e => e.target.src = noImage"
+            @error="handleImageError"
+            @load="handleImageLoad"
+            @loadstart="imageLoading = true"
+            class="w-full h-auto object-cover transition-opacity duration-300"
+            :style="{ opacity: imageLoaded ? '1' : '0', width: '100%', height: 'auto', display: 'block' }"
+            loading="lazy"
+          />
+          
+          <!-- 預設圖片 (當沒有圖片URL或圖片載入失敗時) -->
+          <img
+            v-if="!article.image_url || imageError"
+            :src="noImage"
+            :alt="article.title"
+            class="w-full h-auto object-cover"
+            style="width: 100%; height: auto; display: block;"
           />
         </div>
         <div v-if="article.summary" class="mb-8 p-6 bg-gray-50 rounded-lg border-l-4 border-brand-DEFAULT">
@@ -717,5 +738,20 @@ span[class*="level"]:not(.level-animation) {
   animation: analysisFadeIn 0.8s ease-out 1.5s forwards;
   opacity: 0;
   transform: translateY(30px);
+}
+
+/* 確保圖片完全填滿容器 */
+.article-image-container {
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.article-image-container img {
+  width: 100% !important;
+  height: auto !important;
+  display: block !important;
+  object-fit: cover;
+  object-position: center;
 }
 </style> 

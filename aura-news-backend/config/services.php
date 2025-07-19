@@ -35,4 +35,20 @@ return [
         ],
     ],
 
+    'newsapi' => [
+        'key' => env('NEWS_API_KEY'),
+    ],
+
+    'newsdata' => [
+        'key' => env('NEWSDATA_API_KEY'),
+    ],
+
+    'google_search' => [
+        'key' => env('GOOGLE_SEARCH_API_KEY'),
+    ],
+
+    'gemini' => [
+        'key' => env('GEMINI_API_KEY'),
+    ],
+
 ];

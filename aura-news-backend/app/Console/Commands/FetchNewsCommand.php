@@ -47,7 +47,7 @@ class FetchNewsCommand extends Command
 
     protected function fetchFromNewsApi($categoryName, $language, $size)
     {
-        $apiKey = env('NEWS_API_KEY');
+        $apiKey = config('services.newsapi.key');
         if (!$apiKey) {
             $this->error('NewsAPI Key 未設定，請檢查 .env 檔案。');
             return 1;
@@ -89,8 +89,29 @@ class FetchNewsCommand extends Command
             // 檢查圖片有效性
             $imageUrl = $fetchedArticle['urlToImage'] ?? null;
             if ($imageUrl && preg_match('/^https?:\/\//', $imageUrl)) {
+                // 過濾無效圖片 URL
+                $invalidPatterns = [
+                    '/consent\.yahoo\.com/',
+                    '/placeholder\.com/',
+                    '/default\.jpg/',
+                    '/no-image/',
+                    '/blank\./',
+                ];
+                
+                $isValidImage = true;
+                foreach ($invalidPatterns as $pattern) {
+                    if (preg_match($pattern, $imageUrl)) {
+                        $isValidImage = false;
+                        break;
+                    }
+                }
+                
+                if (!$isValidImage) {
+                    continue;
+                }
+                
                 try {
-                    $client = new \GuzzleHttp\Client(['timeout' => 3, 'verify' => false]);
+                    $client = new \GuzzleHttp\Client(['timeout' => 5, 'verify' => false]);
                     $res = $client->head($imageUrl);
                     if ($res->getStatusCode() !== 200) {
                         continue;

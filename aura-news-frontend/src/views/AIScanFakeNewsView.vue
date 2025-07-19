@@ -4,13 +4,10 @@ import axios from 'axios';
 import { marked } from 'marked';
 import { useHead } from '@vueuse/head';
 
-// 自訂 link renderer，避免連結後方夾帶非網址字元
 const renderer = {
   link(href, title, text) {
-    // 強制 href 與 text 皆為 string，避免 TypeError
     href = typeof href === 'string' ? href : '';
     text = typeof text === 'string' ? text : '';
-    // 僅保留連續網址部分，去除常見結尾雜訊
     let cleanHref = href.replace(/[),。！？\]\[\s]+$/g, '');
     let cleanText = text.replace(/[),。！？\]\[\s]+$/g, '');
     cleanHref = cleanHref.split(' ')[0];
@@ -30,13 +27,12 @@ const error = ref(null);
 const progress = ref('');
 let pollingInterval = null;
 
-// 動畫相關狀態
 const resultSectionRef = ref(null);
 const isResultSectionVisible = ref(false);
 const hasAnimationStarted = ref(false);
 
 const steps = computed(() => {
-  if (/^https?:\/\//i.test(input.value.trim())) {
+  if (/^https?:\/\//.test(input.value.trim())) {
     return [
       '分析網址',
       'AI 產生搜尋關鍵字',
@@ -70,11 +66,11 @@ const confidence = computed(() => {
   return match ? parseInt(match[1], 10) : null;
 });
 const confidenceColor = computed(() => {
-  if (confidence.value === null) return '#d1d5db'; // gray-300
-  if (confidence.value >= 80) return '#22c55e'; // green-500
-  if (confidence.value >= 60) return '#eab308'; // yellow-500
-  if (confidence.value >= 40) return '#f97316'; // orange-500
-  return '#ef4444'; // red-500
+  if (confidence.value === null) return '#d1d5db';
+  if (confidence.value >= 80) return '#22c55e';
+  if (confidence.value >= 60) return '#eab308';
+  if (confidence.value >= 40) return '#f97316';
+  return '#ef4444';
 });
 const resultWithoutConfidence = computed(() => {
   if (!result.value?.result) return '';
@@ -93,14 +89,10 @@ const resultWithoutConfidenceAndSources = computed(() => {
   return text;
 });
 
-// 新增函式：將文字中的網址自動轉為 <a> 連結
 function linkify(text) {
   if (!text) return '';
-  // 強制轉為 string，避免 TypeError
   text = String(text);
-  // 更嚴謹的網址偵測，避免混到非網址字元
   return text.replace(/(https?:\/\/[\w\-\.\/?#=&%+:;@,~]+)(?=[\s\n\r\)\]\}。，！？；：]|$)/g, (url) => {
-    // 僅保留連續網址部分，去除尾端雜訊
     let cleanUrl = url.replace(/[),。！？；：\]\[\s]+$/g, '');
     return `<a href="${cleanUrl}" target="_blank" rel="noopener noreferrer">${cleanUrl}</a>`;
   });
@@ -116,7 +108,6 @@ const scanFakeNews = async () => {
   error.value = null;
   progress.value = '';
   
-  // 重置動畫狀態
   isResultSectionVisible.value = false;
   hasAnimationStarted.value = false;
   if (pollingInterval) {
@@ -125,7 +116,6 @@ const scanFakeNews = async () => {
   }
   try {
     const res = await axios.post('/api/ai/scan-fake-news/start', { content: input.value });
-    // 新增：若後端回傳 error 欄位，直接顯示錯誤
     if (res.data && res.data.error) {
       error.value = res.data.error;
       isLoading.value = false;
@@ -144,7 +134,6 @@ const pollProgress = (taskId) => {
     try {
       const res = await axios.get(`/api/ai/scan-fake-news/progress/${taskId}`);
       progress.value = res.data.progress;
-      // 新增：偵測非新聞內容
       if (res.data.error === '此內容非新聞，請確認輸入') {
         error.value = res.data.error;
         isLoading.value = false;
@@ -152,7 +141,6 @@ const pollProgress = (taskId) => {
         pollingInterval = null;
         return;
       }
-      // 自動結束流程：主文擷取失敗或請求過於頻繁
       if (
         res.data.progress === '主文擷取失敗，請嘗試複製主文內容貼上' ||
         res.data.progress === '請求過於頻繁，請稍後再試'
@@ -169,7 +157,6 @@ const pollProgress = (taskId) => {
         clearInterval(pollingInterval);
         pollingInterval = null;
         
-        // 等待 DOM 更新後設置動畫
         nextTick(() => {
           setupAnimationWhenResultAvailable();
         });
@@ -186,13 +173,11 @@ const pollProgress = (taskId) => {
   }, 1500);
 };
 
-// 設置結果動畫觀察器
 const setupResultAnimationObserver = () => {
   if (!resultSectionRef.value) {
     return;
   }
   
-  // 簡化的觸發動畫函數
   const triggerAnimation = () => {
     if (hasAnimationStarted.value) return;
     
@@ -212,21 +197,19 @@ const setupResultAnimationObserver = () => {
       });
     },
     {
-      threshold: 0.1, // 當 10% 的區塊可見時觸發
-      rootMargin: '0px 0px -150px 0px' // 提前 150px 觸發
+      threshold: 0.1,
+      rootMargin: '0px 0px -150px 0px'
     }
   );
   
   observer.observe(resultSectionRef.value);
   
-  // 滾動監聽器
   const handleScroll = () => {
     if (hasAnimationStarted.value) return;
     
     const rect = resultSectionRef.value.getBoundingClientRect();
     const windowHeight = window.innerHeight;
     
-    // 當區塊進入視窗底部 200px 範圍內時觸發
     if (rect.top < windowHeight - 200 && rect.bottom > 0) {
       triggerAnimation();
       window.removeEventListener('scroll', handleScroll);
@@ -235,7 +218,6 @@ const setupResultAnimationObserver = () => {
   
   window.addEventListener('scroll', handleScroll);
   
-  // 立即檢查一次
   setTimeout(() => {
     const rect = resultSectionRef.value.getBoundingClientRect();
     const windowHeight = window.innerHeight;
@@ -245,14 +227,12 @@ const setupResultAnimationObserver = () => {
     }
   }, 500);
   
-  // 在組件卸載時清理
   onUnmounted(() => {
     observer.disconnect();
     window.removeEventListener('scroll', handleScroll);
   });
 };
 
-// 監聽結果變化，設置動畫
 const setupAnimationWhenResultAvailable = () => {
   if (result.value && resultSectionRef.value && !hasAnimationStarted.value) {
     setupResultAnimationObserver();
@@ -301,7 +281,6 @@ useHead({
       </transition>
     </div>
 
-    <!-- 進度條/步驟條 -->
     <div v-if="isLoading || (progress && progress !== '完成')" class="mb-8">
       <div class="flex items-center justify-between mb-2">
         <span class="text-blue-700 font-semibold">AI 掃描進度</span>
@@ -323,7 +302,6 @@ useHead({
       </div>
     </div>
 
-    <!-- 結果區塊 -->
     <transition name="fade">
       <div 
         v-if="result" 
@@ -343,20 +321,20 @@ useHead({
             :class="{ 'confidence-icon': isResultSectionVisible }" 
             style="width: 170px; height: 170px;"
           >
-            <svg :width="170" :height="170" viewBox="0 0 170 170" style="display:block;">
-              <circle cx="85" cy="85" r="80" fill="#f3f4f6" />
-              <circle
-                :stroke="confidenceColor"
-                stroke-width="14"
-                fill="none"
-                cx="85" cy="85" r="75"
-                :stroke-dasharray="2 * Math.PI * 75"
+          <svg :width="170" :height="170" viewBox="0 0 170 170" style="display:block;">
+            <circle cx="85" cy="85" r="80" fill="#f3f4f6" />
+            <circle
+              :stroke="confidenceColor"
+              stroke-width="14"
+              fill="none"
+              cx="85" cy="85" r="75"
+              :stroke-dasharray="2 * Math.PI * 75"
                 :stroke-dashoffset="isResultSectionVisible ? 2 * Math.PI * 75 * (1 - confidence / 100) : 2 * Math.PI * 75"
                 :style="{ '--final-offset': 2 * Math.PI * 75 * (1 - confidence / 100) + 'px' }"
                 :class="{ 'progress-animation': isResultSectionVisible }"
-                stroke-linecap="round"
-                transform="rotate(-90 85 85)"
-              />
+              stroke-linecap="round"
+              transform="rotate(-90 85 85)"
+            />
               <text 
                 x="85" y="85" 
                 text-anchor="middle" 
@@ -371,7 +349,7 @@ useHead({
               >
                 {{ confidence !== null ? confidence + '%' : '' }}
               </text>
-            </svg>
+          </svg>
           </div>
           <span 
             class="text-lg font-bold text-gray-700" 
