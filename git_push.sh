@@ -13,7 +13,7 @@ git add .
 
 # 提交變更
 echo "提交變更..."
-git commit -m "feat: 優化 文章詳細頁 icon"
+git commit -m "feat: 優化 AIScanFakeNewsView.vue 的 UI"
 
 # 推送到 GitHub
 echo "推送到 GitHub..."

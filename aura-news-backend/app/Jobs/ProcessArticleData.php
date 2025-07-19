@@ -72,7 +72,7 @@ class ProcessArticleData implements ShouldQueue
                 
                 if (in_array($response->getStatusCode(), [403, 404, 410, 451])) {
                     \Log::warning('遇到永久性錯誤，跳過重試: ' . $response->getStatusCode() . ' for URL: ' . $this->article->source_url);
-                    return;
+                return;
                 }
                 
                 throw new \Exception('HTTP 狀態碼異常: ' . $response->getStatusCode());

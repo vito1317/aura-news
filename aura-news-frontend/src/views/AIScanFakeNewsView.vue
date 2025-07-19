@@ -337,7 +337,7 @@ useHead({
           </svg>
           <h2 class="text-xl font-bold text-blue-800">AI 判斷結果</h2>
         </div>
-        <div v-if="confidence !== null" class="mb-4 flex flex-col items-center justify-center" style="height:170px; margin-bottom: 0;">
+        <div v-if="confidence !== null" class="mb-4 flex flex-col items-center justify-center" style="height:200px; margin-bottom: 0;">
           <div 
             class="relative" 
             :class="{ 'confidence-icon': isResultSectionVisible }" 
@@ -375,10 +375,10 @@ useHead({
           </div>
           <span 
             class="text-lg font-bold text-gray-700" 
-            style="margin-top: 20px;"
+            style="margin-top: 40px;"
             :class="{ 'level-animation': isResultSectionVisible }"
             :style="{ 
-              marginTop: '20px',
+              marginTop: '40px',
               opacity: isResultSectionVisible ? 'inherit' : '0', 
               transform: isResultSectionVisible ? 'inherit' : 'translateY(20px)' 
             }"
@@ -389,7 +389,7 @@ useHead({
         <div 
           class="text-gray-800 leading-relaxed text-base prose prose-blue max-w-none" 
           v-html="marked(resultWithoutConfidenceAndSources)" 
-          style="word-break: break-all; overflow-wrap: anywhere;"
+          style="word-break: break-all; overflow-wrap: anywhere; margin-top: 2rem;"
           :class="{ 'analysis-animation': isResultSectionVisible }"
           :style="{ 
             opacity: isResultSectionVisible ? 'inherit' : '0', 
