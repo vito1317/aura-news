@@ -544,12 +544,12 @@ const formatDate = (dateString) => {
           <div v-else class="text-center py-8">
             <div class="w-16 h-16 mx-auto mb-4">
               <svg width="64" height="64" viewBox="0 0 64 64" class="text-gray-400">
-                <!-- 半圓形背景 -->
-                <path d="M 8 40 A 24 24 0 0 1 56 40" stroke="currentColor" stroke-width="3" fill="none" stroke-linecap="round"/>
+                <!-- 半圓形背景 - 更細緻的線條 -->
+                <path d="M 10 42 A 22 22 0 0 1 54 42" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" opacity="0.6"/>
                 
-                <!-- 問號圖標 -->
-                <path d="M 28 20 Q 28 16 32 16 Q 36 16 36 20 Q 36 24 32 28 L 32 32" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
-                <circle cx="32" cy="36" r="1" fill="currentColor"/>
+                <!-- 問號圖標 - 進一步往下移動 -->
+                <path d="M 26 30 Q 26 26 32 26 Q 38 26 38 30 Q 38 34 32 38 L 32 42" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+                <circle cx="32" cy="46" r="1.5" fill="currentColor"/>
               </svg>
             </div>
             <p class="text-gray-600 mb-4">此文章尚未進行可信度分析</p>
