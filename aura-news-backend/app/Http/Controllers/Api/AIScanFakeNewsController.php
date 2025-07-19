@@ -38,7 +38,7 @@ class AIScanFakeNewsController extends Controller
         ], 600);
         Cache::put("ai_scan_content_{$taskId}", $content, 600);
         try {
-            AIScanFakeNewsJob::dispatch($taskId, $content, $clientIp);
+            AIScanFakeNewsJob::dispatch($taskId, $content, $clientIp, null);
         } catch (\Exception $e) {
             \Log::error('AIScanFakeNewsController job dispatch failed', [
                 'ip' => $clientIp,

@@ -11,6 +11,8 @@ use App\Http\Controllers\Api\Admin\ImageUploadController;
 use App\Http\Controllers\Api\Admin\CategoryController;
 use Illuminate\Support\Str;
 use App\Http\Controllers\Api\ArticleSearchController;
+use App\Http\Controllers\Api\ArticleCredibilityController;
+use App\Http\Controllers\Api\NewsDataController;
 
 Route::post('/login', [AuthController::class, 'login']);
 Route::middleware('auth:sanctum')->group(function () {
@@ -23,10 +25,17 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
 });
 
 Route::get('/articles', [ArticleController::class, 'index']);
-Route::get('/articles/{article}', [ArticleController::class, 'show']);
 Route::get('/categories/{category}/articles', [ArticleSearchController::class, 'getByCategory']);
 Route::get('/search', [ArticleSearchController::class, 'search']);
 Route::get('/categories', [CategoryController::class, 'index'])->name('categories.index');
+
+// 文章可信度相關路由 - 必須放在通用文章路由之前
+Route::get('/articles/{articleId}/credibility', [ArticleCredibilityController::class, 'getCredibility']);
+Route::post('/articles/{articleId}/credibility/analyze', [ArticleCredibilityController::class, 'triggerAnalysis']);
+Route::get('/articles/credibility/progress/{taskId}', [ArticleCredibilityController::class, 'getAnalysisProgress']);
+
+// 通用文章路由 - 放在可信度路由之後
+Route::get('/articles/{article}', [ArticleController::class, 'show']);
 
 Route::get('/test-cors', function () {
     return response('CORS OK')->header('Access-Control-Allow-Origin', '*');
@@ -35,6 +44,11 @@ Route::get('/test-cors', function () {
 Route::post('/ai/scan-fake-news', [\App\Http\Controllers\Api\AIScanFakeNewsController::class, 'scan']);
 Route::post('/ai/scan-fake-news/start', [\App\Http\Controllers\Api\AIScanFakeNewsController::class, 'start']);
 Route::get('/ai/scan-fake-news/progress/{taskId}', [\App\Http\Controllers\Api\AIScanFakeNewsController::class, 'progress']);
+
+// NewsData API 路由
+Route::get('/newsdata/search', [NewsDataController::class, 'search']);
+Route::get('/newsdata/latest', [NewsDataController::class, 'latest']);
+Route::get('/newsdata/categories', [NewsDataController::class, 'categories']);
 
 Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->name('admin.')->group(function () {
     Route::get('/stats', [DashboardController::class, 'getStats']);

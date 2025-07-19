@@ -8,18 +8,45 @@ use App\Models\Article;
 use App\Models\Category;
 use Carbon\Carbon;
 use Illuminate\Support\Str;
+use App\Services\NewsDataApiService;
 
 class FetchNewsCommand extends Command
 {
-    protected $signature = 'app:fetch-news {category=科技}';
+    protected $signature = 'app:fetch-news {category=科技} {--api=newsapi} {--language=zh} {--size=20}';
 
-    protected $description = '從 NewsAPI.org 根據指定的分類抓取新聞';
+    protected $description = '從 NewsAPI.org 或 NewsData.io 根據指定的分類抓取新聞';
+
+    protected $newsDataService;
+
+    public function __construct(NewsDataApiService $newsDataService)
+    {
+        parent::__construct();
+        $this->newsDataService = $newsDataService;
+    }
 
     public function handle()
     {
         $categoryName = $this->argument('category');
-        $this->info("開始從 NewsAPI.org 抓取 [{$categoryName}] 分類的新聞...");
-        
+        $apiType = $this->option('api');
+        $language = $this->option('language');
+        $size = $this->option('size');
+
+        $this->info("開始從 {$apiType} 抓取 [{$categoryName}] 分類的新聞...");
+        if ($apiType === 'newsdata') {
+            $this->info("語言: {$language}, 數量: 10 (NewsData API 預設值)");
+        } else {
+            $this->info("語言: {$language}, 數量: {$size}");
+        }
+
+        if ($apiType === 'newsdata') {
+            return $this->fetchFromNewsData($categoryName, $language, $size);
+        } else {
+            return $this->fetchFromNewsApi($categoryName, $language, $size);
+        }
+    }
+
+    protected function fetchFromNewsApi($categoryName, $language, $size)
+    {
         $apiKey = env('NEWS_API_KEY');
         if (!$apiKey) {
             $this->error('NewsAPI Key 未設定，請檢查 .env 檔案。');
@@ -28,15 +55,15 @@ class FetchNewsCommand extends Command
         
         $category = Category::firstOrCreate(
             ['name' => $categoryName], 
-            ['slug' => $categoryName]
+            ['slug' => Str::slug($categoryName)]
         );
 
         $response = Http::get('https://newsapi.org/v2/everything', [
             'q' => $categoryName,
-            'language' => 'zh',
+            'language' => $language,
             'sortBy' => 'publishedAt',
             'apiKey' => $apiKey,
-            'pageSize' => 20,
+            'pageSize' => $size,
         ]);
 
         if ($response->failed()) {
@@ -93,6 +120,62 @@ class FetchNewsCommand extends Command
         }
 
         $this->info("抓取完成！共為 [{$categoryName}] 分類處理了 {$count} 篇新文章。");
+        return 0;
+    }
+
+    protected function fetchFromNewsData($categoryName, $language, $size)
+    {
+        $category = Category::firstOrCreate(
+            ['name' => $categoryName], 
+            ['slug' => Str::slug($categoryName)]
+        );
+
+        $articles = $this->newsDataService->searchArticles($categoryName, $language, $size);
+
+        if (!$articles) {
+            $this->error('無法從 NewsData API 獲取資料');
+            return 1;
+        }
+
+        $count = 0;
+        $skipped = 0;
+
+        foreach ($articles as $articleData) {
+            // 檢查是否已存在
+            if (Article::where('source_url', $articleData['source_url'])->exists()) {
+                $skipped++;
+                continue;
+            }
+
+            $this->line("正在建立: " . $articleData['title']);
+            
+            try {
+                $article = Article::create([
+                    'source_url' => $articleData['source_url'],
+                    'title' => $articleData['title'],
+                    'content' => $articleData['content'],
+                    'image_url' => $articleData['image_url'],
+                    'summary' => $articleData['summary'],
+                    'category_id' => $category->id,
+                    'author' => $articleData['author'],
+                    'status' => 1,
+                    'published_at' => $articleData['published_at'],
+                ]);
+
+                // 觸發文章處理任務
+                dispatch(new \App\Jobs\ProcessArticleData($article));
+                $count++;
+            } catch (\Exception $e) {
+                $this->error("建立文章失敗: " . $e->getMessage());
+                continue;
+            }
+        }
+
+        $this->info("抓取完成！");
+        $this->info("新增文章: {$count} 篇");
+        $this->info("跳過重複: {$skipped} 篇");
+        $this->info("總計處理: " . ($count + $skipped) . " 篇");
+
         return 0;
     }
 }

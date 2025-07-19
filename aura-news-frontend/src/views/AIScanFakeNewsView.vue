@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed } from 'vue';
+import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue';
 import axios from 'axios';
 import { marked } from 'marked';
 import { useHead } from '@vueuse/head';
@@ -29,6 +29,11 @@ const result = ref(null);
 const error = ref(null);
 const progress = ref('');
 let pollingInterval = null;
+
+// 動畫相關狀態
+const resultSectionRef = ref(null);
+const isResultSectionVisible = ref(false);
+const hasAnimationStarted = ref(false);
 
 const steps = computed(() => {
   if (/^https?:\/\//i.test(input.value.trim())) {
@@ -110,6 +115,10 @@ const scanFakeNews = async () => {
   result.value = null;
   error.value = null;
   progress.value = '';
+  
+  // 重置動畫狀態
+  isResultSectionVisible.value = false;
+  hasAnimationStarted.value = false;
   if (pollingInterval) {
     clearInterval(pollingInterval);
     pollingInterval = null;
@@ -159,6 +168,11 @@ const pollProgress = (taskId) => {
         isLoading.value = false;
         clearInterval(pollingInterval);
         pollingInterval = null;
+        
+        // 等待 DOM 更新後設置動畫
+        nextTick(() => {
+          setupAnimationWhenResultAvailable();
+        });
       }
     } catch (err) {
       if (err.response && err.response.status === 404) {
@@ -170,6 +184,79 @@ const pollProgress = (taskId) => {
       pollingInterval = null;
     }
   }, 1500);
+};
+
+// 設置結果動畫觀察器
+const setupResultAnimationObserver = () => {
+  if (!resultSectionRef.value) {
+    return;
+  }
+  
+  // 簡化的觸發動畫函數
+  const triggerAnimation = () => {
+    if (hasAnimationStarted.value) return;
+    
+    hasAnimationStarted.value = true;
+    
+    setTimeout(() => {
+      isResultSectionVisible.value = true;
+    }, 300);
+  };
+  
+  const observer = new IntersectionObserver(
+    (entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting && !hasAnimationStarted.value) {
+          triggerAnimation();
+        }
+      });
+    },
+    {
+      threshold: 0.1, // 當 10% 的區塊可見時觸發
+      rootMargin: '0px 0px -150px 0px' // 提前 150px 觸發
+    }
+  );
+  
+  observer.observe(resultSectionRef.value);
+  
+  // 滾動監聽器
+  const handleScroll = () => {
+    if (hasAnimationStarted.value) return;
+    
+    const rect = resultSectionRef.value.getBoundingClientRect();
+    const windowHeight = window.innerHeight;
+    
+    // 當區塊進入視窗底部 200px 範圍內時觸發
+    if (rect.top < windowHeight - 200 && rect.bottom > 0) {
+      triggerAnimation();
+      window.removeEventListener('scroll', handleScroll);
+    }
+  };
+  
+  window.addEventListener('scroll', handleScroll);
+  
+  // 立即檢查一次
+  setTimeout(() => {
+    const rect = resultSectionRef.value.getBoundingClientRect();
+    const windowHeight = window.innerHeight;
+    
+    if (rect.top < windowHeight - 200 && rect.bottom > 0 && !hasAnimationStarted.value) {
+      triggerAnimation();
+    }
+  }, 500);
+  
+  // 在組件卸載時清理
+  onUnmounted(() => {
+    observer.disconnect();
+    window.removeEventListener('scroll', handleScroll);
+  });
+};
+
+// 監聽結果變化，設置動畫
+const setupAnimationWhenResultAvailable = () => {
+  if (result.value && resultSectionRef.value && !hasAnimationStarted.value) {
+    setupResultAnimationObserver();
+  }
 };
 
 useHead({
@@ -238,30 +325,87 @@ useHead({
 
     <!-- 結果區塊 -->
     <transition name="fade">
-      <div v-if="result" class="mt-8 p-8 bg-gradient-to-br from-blue-50 to-white rounded-2xl border border-blue-100 shadow">
+      <div 
+        v-if="result" 
+        ref="resultSectionRef"
+        class="mt-8 p-8 bg-gradient-to-br from-blue-50 to-white rounded-2xl border border-blue-100 shadow"
+        :class="{ 'result-animation': isResultSectionVisible }"
+      >
         <div class="flex items-center mb-4">
-          <svg class="h-8 w-8 text-green-500 mr-2" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2l4-4m5 2a9 9 0 11-18 0a9 9 0 0118 0z"/></svg>
+          <svg class="h-8 w-8 text-green-500 mr-2" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2l4-4m5 2a9 9 0 11-18 0a9 9 0 0118 0z"/>
+          </svg>
           <h2 class="text-xl font-bold text-blue-800">AI 判斷結果</h2>
         </div>
         <div v-if="confidence !== null" class="mb-4 flex flex-col items-center justify-center" style="height:170px; margin-bottom: 0;">
-          <svg :width="170" :height="170" viewBox="0 0 170 170" style="display:block;">
-            <circle cx="85" cy="85" r="80" fill="#f3f4f6" />
-            <circle
-              :stroke="confidenceColor"
-              stroke-width="14"
-              fill="none"
-              cx="85" cy="85" r="75"
-              :stroke-dasharray="2 * Math.PI * 75"
-              :stroke-dashoffset="2 * Math.PI * 75 * (1 - confidence / 100)"
-              stroke-linecap="round"
-              transform="rotate(-90 85 85)"
-            />
-            <text x="85" y="85" text-anchor="middle" font-size="44" font-weight="bold" :fill="confidenceColor" dominant-baseline="middle" alignment-baseline="middle" dy=".1em">{{ confidence !== null ? confidence + '%' : '' }}</text>
-          </svg>
-          <span class="text-lg font-bold text-gray-700" style="margin-top: 20px;">AI 可信度</span>
+          <div 
+            class="relative" 
+            :class="{ 'confidence-icon': isResultSectionVisible }" 
+            style="width: 170px; height: 170px;"
+          >
+            <svg :width="170" :height="170" viewBox="0 0 170 170" style="display:block;">
+              <circle cx="85" cy="85" r="80" fill="#f3f4f6" />
+              <circle
+                :stroke="confidenceColor"
+                stroke-width="14"
+                fill="none"
+                cx="85" cy="85" r="75"
+                :stroke-dasharray="2 * Math.PI * 75"
+                :stroke-dashoffset="isResultSectionVisible ? 2 * Math.PI * 75 * (1 - confidence / 100) : 2 * Math.PI * 75"
+                :style="{ '--final-offset': 2 * Math.PI * 75 * (1 - confidence / 100) + 'px' }"
+                :class="{ 'progress-animation': isResultSectionVisible }"
+                stroke-linecap="round"
+                transform="rotate(-90 85 85)"
+              />
+              <text 
+                x="85" y="85" 
+                text-anchor="middle" 
+                font-size="44" 
+                font-weight="bold" 
+                :fill="confidenceColor" 
+                dominant-baseline="middle" 
+                alignment-baseline="middle" 
+                dy=".1em"
+                :class="{ 'score-animation': isResultSectionVisible }"
+                :style="{ opacity: isResultSectionVisible ? 'inherit' : '0', transform: isResultSectionVisible ? 'inherit' : 'scale(0.8)' }"
+              >
+                {{ confidence !== null ? confidence + '%' : '' }}
+              </text>
+            </svg>
+          </div>
+          <span 
+            class="text-lg font-bold text-gray-700" 
+            style="margin-top: 20px;"
+            :class="{ 'level-animation': isResultSectionVisible }"
+            :style="{ 
+              marginTop: '20px',
+              opacity: isResultSectionVisible ? 'inherit' : '0', 
+              transform: isResultSectionVisible ? 'inherit' : 'translateY(20px)' 
+            }"
+          >
+            AI 可信度
+          </span>
         </div>
-        <div class="text-gray-800 leading-relaxed text-base prose prose-blue max-w-none" v-html="marked(resultWithoutConfidenceAndSources)" style="word-break: break-all; overflow-wrap: anywhere;"></div>
-        <div v-if="sources" class="mt-6 p-4 rounded-lg bg-blue-50 border-l-4 border-blue-400 text-blue-900 text-sm whitespace-pre-line" style="word-break: break-all; overflow-wrap: anywhere;">
+        <div 
+          class="text-gray-800 leading-relaxed text-base prose prose-blue max-w-none" 
+          v-html="marked(resultWithoutConfidenceAndSources)" 
+          style="word-break: break-all; overflow-wrap: anywhere;"
+          :class="{ 'analysis-animation': isResultSectionVisible }"
+          :style="{ 
+            opacity: isResultSectionVisible ? 'inherit' : '0', 
+            transform: isResultSectionVisible ? 'inherit' : 'translateY(30px)' 
+          }"
+        ></div>
+        <div 
+          v-if="sources" 
+          class="mt-6 p-4 rounded-lg bg-blue-50 border-l-4 border-blue-400 text-blue-900 text-sm whitespace-pre-line" 
+          style="word-break: break-all; overflow-wrap: anywhere;"
+          :class="{ 'sources-animation': isResultSectionVisible }"
+          :style="{ 
+            opacity: isResultSectionVisible ? 'inherit' : '0', 
+            transform: isResultSectionVisible ? 'inherit' : 'translateY(30px)' 
+          }"
+        >
           <strong class="block mb-1 text-blue-700">查證出處</strong>
           <span v-html="linkify(sources)"></span>
         </div>
@@ -276,5 +420,160 @@ useHead({
 }
 .fade-enter-from, .fade-leave-to {
   opacity: 0;
+}
+
+/* 可信度圖標動畫效果 */
+@keyframes credibilityPulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.05);
+    opacity: 0.8;
+  }
+}
+
+.confidence-icon {
+  animation: credibilityPulse 2s ease-in-out infinite;
+}
+
+/* 圓形進度條動畫 */
+@keyframes progressFill {
+  from {
+    stroke-dashoffset: 471; /* 2 * Math.PI * 75 */
+  }
+  to {
+    stroke-dashoffset: var(--final-offset, 0);
+  }
+}
+
+.progress-animation {
+  animation: progressFill 1.5s ease-out forwards;
+}
+
+/* 確保進度條在沒有動畫時也能正常顯示 */
+circle[class*="progress"]:not(.progress-animation) {
+  stroke-dashoffset: 0;
+}
+
+/* 分數文字動畫 */
+@keyframes scoreFadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.score-animation {
+  animation: scoreFadeIn 0.6s ease-out 1s forwards;
+  opacity: 0;
+  transform: scale(0.8);
+}
+
+/* 確保 SVG 文字元素在沒有動畫時也能正常顯示 */
+text:not(.score-animation) {
+  opacity: 1;
+  transform: scale(1);
+}
+
+/* 等級標籤動畫 */
+@keyframes levelSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.level-animation {
+  animation: levelSlideIn 0.6s ease-out 1.2s forwards;
+  opacity: 0;
+  transform: translateY(20px);
+}
+
+/* 確保等級標籤在沒有動畫時也能正常顯示 */
+span[class*="level"]:not(.level-animation) {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* 結果區塊動畫 */
+@keyframes resultFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.result-animation {
+  animation: resultFadeIn 0.8s ease-out forwards;
+  opacity: 0;
+  transform: translateY(30px);
+}
+
+/* 確保結果區塊在沒有動畫時也能正常顯示 */
+div[class*="result"]:not(.result-animation) {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* 分析內容動畫 */
+@keyframes analysisFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.analysis-animation {
+  animation: analysisFadeIn 0.8s ease-out 1.5s forwards;
+  opacity: 0;
+  transform: translateY(30px);
+}
+
+/* 確保分析內容在沒有動畫時也能正常顯示 */
+div[class*="analysis"]:not(.analysis-animation) {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* 查證出處動畫 */
+@keyframes sourcesSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.sources-animation {
+  animation: sourcesSlideIn 0.8s ease-out 1.8s forwards;
+  opacity: 0;
+  transform: translateY(30px);
+}
+
+/* 確保查證出處在沒有動畫時也能正常顯示 */
+div[class*="sources"]:not(.sources-animation) {
+  opacity: 1;
+  transform: translateY(0);
 }
 </style> 

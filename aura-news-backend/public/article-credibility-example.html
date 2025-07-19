@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>文章可信度分析示例</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input[type="number"] {
+            width: 100px;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 10px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        button:disabled {
+            background-color: #6c757d;
+            cursor: not-allowed;
+        }
+        .result {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 4px;
+            white-space: pre-wrap;
+        }
+        .success {
+            background-color: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+        .error {
+            background-color: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+        .info {
+            background-color: #d1ecf1;
+            border: 1px solid #bee5eb;
+            color: #0c5460;
+        }
+        .credibility-score {
+            font-size: 24px;
+            font-weight: bold;
+            text-align: center;
+            padding: 20px;
+            margin: 10px 0;
+            border-radius: 8px;
+        }
+        .score-high {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .score-medium {
+            background-color: #fff3cd;
+            color: #856404;
+        }
+        .score-low {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>文章可信度分析示例</h1>
+        
+        <div class="form-group">
+            <label for="articleId">文章 ID:</label>
+            <input type="number" id="articleId" placeholder="輸入文章 ID">
+        </div>
+        
+        <div class="form-group">
+            <button onclick="getCredibility()">獲取可信度分析</button>
+            <button onclick="triggerAnalysis()">觸發可信度分析</button>
+        </div>
+        
+        <div id="result"></div>
+    </div>
+
+    <script>
+        const API_BASE = '/api';
+        
+        async function getCredibility() {
+            const articleId = document.getElementById('articleId').value;
+            if (!articleId) {
+                showResult('請輸入文章 ID', 'error');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_BASE}/articles/${articleId}/credibility`);
+                const data = await response.json();
+                
+                if (response.ok) {
+                    if (data.has_analysis) {
+                        displayCredibilityResult(data);
+                    } else {
+                        showResult(data.message, 'info');
+                    }
+                } else {
+                    showResult(`錯誤: ${data.error || data.message}`, 'error');
+                }
+            } catch (error) {
+                showResult(`請求失敗: ${error.message}`, 'error');
+            }
+        }
+        
+        async function triggerAnalysis() {
+            const articleId = document.getElementById('articleId').value;
+            if (!articleId) {
+                showResult('請輸入文章 ID', 'error');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_BASE}/articles/${articleId}/credibility/analyze`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                });
+                const data = await response.json();
+                
+                if (response.ok) {
+                    showResult(`分析已開始，任務 ID: ${data.taskId}`, 'success');
+                    // 可以選擇開始輪詢進度
+                    if (data.taskId) {
+                        pollProgress(data.taskId);
+                    }
+                } else {
+                    showResult(`錯誤: ${data.error || data.message}`, 'error');
+                }
+            } catch (error) {
+                showResult(`請求失敗: ${error.message}`, 'error');
+            }
+        }
+        
+        async function pollProgress(taskId) {
+            const maxAttempts = 60; // 最多輪詢 5 分鐘
+            let attempts = 0;
+            
+            const poll = async () => {
+                if (attempts >= maxAttempts) {
+                    showResult('分析超時，請稍後檢查結果', 'error');
+                    return;
+                }
+                
+                try {
+                    const response = await fetch(`${API_BASE}/articles/credibility/progress/${taskId}`);
+                    const data = await response.json();
+                    
+                    if (response.ok) {
+                        if (data.progress === '完成' && data.result) {
+                            showResult('分析完成！', 'success');
+                            // 這裡可以重新獲取可信度結果
+                            setTimeout(() => getCredibility(), 1000);
+                        } else if (data.progress === 'not_found') {
+                            showResult('任務不存在', 'error');
+                        } else {
+                            showResult(`進度: ${data.progress}`, 'info');
+                            attempts++;
+                            setTimeout(poll, 5000); // 5 秒後再次輪詢
+                        }
+                    } else {
+                        showResult(`進度查詢失敗: ${data.error || data.message}`, 'error');
+                    }
+                } catch (error) {
+                    showResult(`進度查詢失敗: ${error.message}`, 'error');
+                }
+            };
+            
+            poll();
+        }
+        
+        function displayCredibilityResult(data) {
+            const resultDiv = document.getElementById('result');
+            let scoreClass = 'score-medium';
+            
+            if (data.credibility_score >= 70) {
+                scoreClass = 'score-high';
+            } else if (data.credibility_score < 50) {
+                scoreClass = 'score-low';
+            }
+            
+            resultDiv.innerHTML = `
+                <div class="result success">
+                    <h3>可信度分析結果</h3>
+                    <div class="credibility-score ${scoreClass}">
+                        可信度: ${data.credibility_score || 'N/A'}%
+                    </div>
+                    <p><strong>文章標題:</strong> ${data.article_title}</p>
+                    <p><strong>來源:</strong> ${data.article_source}</p>
+                    <p><strong>分析時間:</strong> ${new Date(data.credibility_checked_at).toLocaleString('zh-TW')}</p>
+                    <hr>
+                    <h4>詳細分析:</h4>
+                    <div style="white-space: pre-wrap;">${data.credibility_analysis}</div>
+                </div>
+            `;
+        }
+        
+        function showResult(message, type) {
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = `<div class="result ${type}">${message}</div>`;
+        }
+    </script>
+</body>
+</html> 

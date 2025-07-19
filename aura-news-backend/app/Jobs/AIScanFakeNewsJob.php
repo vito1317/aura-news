@@ -14,6 +14,7 @@ use andreskrey\Readability\Readability;
 use App\Models\Article;
 use andreskrey\Readability\Configuration;
 use AlesZatloukal\GoogleSearchApi\GoogleSearchApi;
+use App\Services\NewsDataApiService;
 
 class AIScanFakeNewsJob implements ShouldQueue
 {
@@ -22,12 +23,14 @@ class AIScanFakeNewsJob implements ShouldQueue
     protected $taskId;
     protected $content;
     protected $clientIp;
+    protected $articleId; // 新增：文章 ID
 
-    public function __construct($taskId, $content, $clientIp)
+    public function __construct($taskId, $content, $clientIp, $articleId = null)
     {
         $this->taskId = $taskId;
         $this->content = $content;
         $this->clientIp = $clientIp;
+        $this->articleId = $articleId;
     }
 
     public function handle()
@@ -159,6 +162,10 @@ class AIScanFakeNewsJob implements ShouldQueue
         $articles = Article::search($searchKeyword)->take(3)->get();
         $searchText = '';
         foreach ($articles as $idx => $article) {
+            // 如果是文章可信度分析，排除自己
+            if ($this->articleId && $article->id == $this->articleId) {
+                continue;
+            }
             $searchText .= ($idx+1) . ". [站內] 標題：" . $article->title . "\n";
             $searchText .= "摘要：" . ($article->summary ?: mb_substr(strip_tags($article->content),0,100)) . "\n";
             $searchText .= "來源：" . ($article->source_url ?? '') . "\n---\n";
@@ -182,7 +189,7 @@ class AIScanFakeNewsJob implements ShouldQueue
                 $newsData = json_decode($newsResponse->getBody(), true);
                 if (!empty($newsData['articles'])) {
                     foreach ($newsData['articles'] as $idx => $article) {
-                        $searchText .= ($idx+1) . ". [全網] 標題：" . $article['title'] . "\n";
+                        $searchText .= ($idx+1) . ". [NewsAPI] 標題：" . $article['title'] . "\n";
                         $searchText .= "摘要：" . ($article['description'] ?? '') . "\n";
                         $searchText .= "來源：" . ($article['url'] ?? '') . "\n---\n";
                     }
@@ -194,7 +201,30 @@ class AIScanFakeNewsJob implements ShouldQueue
                 ]);
             }
         }
-        // 3. Google Custom Search
+
+        // 3. NewsData API 全網新聞搜尋
+        $newsDataApiKey = env('NEWSDATA_API_KEY');
+        if ($newsDataApiKey) {
+            try {
+                $newsDataService = new NewsDataApiService();
+                $newsDataArticles = $newsDataService->searchArticles($searchKeyword, 'zh', 3);
+                
+                if ($newsDataArticles && $newsDataArticles->count() > 0) {
+                    foreach ($newsDataArticles as $idx => $article) {
+                        $searchText .= ($idx+1) . ". [NewsData] 標題：" . $article['title'] . "\n";
+                        $searchText .= "摘要：" . ($article['summary'] ?? '') . "\n";
+                        $searchText .= "來源：" . ($article['source_url'] ?? '') . "\n---\n";
+                    }
+                }
+            } catch (\Exception $e) {
+                \Log::error('NewsData API 查詢失敗', [
+                    'taskId' => $this->taskId,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+
+        // 4. Google Custom Search
         $googleSearchText = '';
         try {
             \Log::info('GoogleSearchApi config debug', [
@@ -248,5 +278,56 @@ class AIScanFakeNewsJob implements ShouldQueue
             'progress' => '完成',
             'result' => $aiText,
         ], 600);
+
+        // 如果是文章可信度分析，自動更新文章資訊
+        if ($this->articleId) {
+            $this->updateArticleCredibility($aiText);
+        }
+    }
+
+    /**
+     * 更新文章的可信度資訊
+     */
+    private function updateArticleCredibility($analysisResult)
+    {
+        try {
+            $article = Article::find($this->articleId);
+            if (!$article) {
+                \Log::error('找不到對應的文章', ['articleId' => $this->articleId]);
+                return;
+            }
+
+            // 提取可信度分數
+            $credibilityScore = $this->extractCredibilityScore($analysisResult);
+            
+            // 更新文章
+            $article->update([
+                'credibility_analysis' => $analysisResult,
+                'credibility_score' => $credibilityScore,
+                'credibility_checked_at' => now(),
+            ]);
+
+            \Log::info('文章可信度分析完成並更新', [
+                'article_id' => $article->id,
+                'credibility_score' => $credibilityScore,
+            ]);
+
+        } catch (\Exception $e) {
+            \Log::error('更新文章可信度失敗', [
+                'articleId' => $this->articleId,
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    /**
+     * 從 AI 回應中提取可信度百分比
+     */
+    private function extractCredibilityScore(string $aiText): ?int
+    {
+        if (preg_match('/【可信度：(\d+)%】/', $aiText, $matches)) {
+            return (int) $matches[1];
+        }
+        return null;
     }
 } 
