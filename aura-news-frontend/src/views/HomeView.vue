@@ -21,7 +21,14 @@ useHead({
 });
 
 const articles = ref([]);
+const totalArticles = ref(0);
+const totalViews = ref(0);
+const avgCredibility = ref(0);
 const isLoading = ref(true);
+const currentPage = ref(1);
+const hasMore = ref(true);
+const isLoadingMore = ref(false);
+const perPage = 12;
 
 function isValidArticle(article) {
   const invalidMsg = '{emptyPanelMsg}';
@@ -30,42 +37,219 @@ function isValidArticle(article) {
     article.summary && article.summary.length > 10 &&
     article.image_url && article.image_url.length > 10 &&
     !article.summary.includes(invalidMsg) &&
-    !article.image_url.includes(invalidMsg)
+    !article.image_url.includes(invalidMsg) &&
+    article.content && article.content.length > 100
   );
 }
 
+
+
 onMounted(async () => {
-  try {
-    const response = await axios.get('/api/articles');
-    articles.value = (response.data.data || []).filter(isValidArticle);
-  } catch (error) {
-    console.error("無法載入首頁文章:", error);
-  } finally {
-    isLoading.value = false;
-  }
+  await loadPopularArticles(); // 先載入熱門文章，用於輪播圖
+  await loadArticles(); // 再載入最新文章
 });
 
-const carouselArticles = computed(() => articles.value.slice(0, 4));
-const latestArticles = computed(() => articles.value.slice(4, 10));
-const popularArticles = computed(() => articles.value.slice(10, 15));
+// 載入文章
+const loadArticles = async (page = 1, append = false) => {
+  if (page === 1) {
+    isLoading.value = true;
+  } else {
+    isLoadingMore.value = true;
+  }
+  
+  try {
+    const response = await axios.get(`/api/articles?page=${page}&per_page=${perPage}&sort_by=latest`);
+    const validArticles = (response.data.data || []).filter(isValidArticle);
+    
+    // 儲存總文章數
+    totalArticles.value = response.data.total || 0;
+    
+    if (append) {
+      // 追加模式：直接添加到列表末尾（API已經按時間排序）
+      articles.value.push(...validArticles);
+    } else {
+      // 初始載入：替換整個列表
+      articles.value = validArticles;
+    }
+    
+    // 更新分頁狀態
+    currentPage.value = page;
+    hasMore.value = articles.value.length < totalArticles.value;
+    
+    // 只在初始載入時獲取統計資料
+    if (page === 1) {
+      await fetchStats();
+    }
+    
+  } catch (error) {
+    console.error("無法載入文章:", error);
+  } finally {
+    isLoading.value = false;
+    isLoadingMore.value = false;
+  }
+};
+
+// 載入更多文章
+const loadMore = async () => {
+  if (isLoadingMore.value || !hasMore.value) return;
+  await loadArticles(currentPage.value + 1, true);
+};
+
+// 獲取統計資料
+const fetchStats = async () => {
+  try {
+    const response = await axios.get('/api/articles/stats');
+    totalViews.value = response.data.total_views || 0;
+    avgCredibility.value = response.data.avg_credibility || 0;
+  } catch (error) {
+    console.error("無法載入統計資料:", error);
+    // 如果API失敗，使用當前文章的資料作為備用
+    totalViews.value = articles.value.reduce((sum, article) => sum + (article.view_count || 0), 0);
+    avgCredibility.value = articles.value.length > 0 
+      ? Math.round(articles.value.reduce((sum, article) => sum + (article.credibility_score || 0), 0) / articles.value.length)
+      : 0;
+  }
+};
+
+// 輪播文章：最熱門的4篇（只顯示有熱門度分數的文章）
+const carouselArticles = computed(() => 
+  popularArticles.value
+    .filter(article => article.popularity_score && article.popularity_score > 0)
+    .slice(0, 4)
+);
+
+// 最新文章：直接使用已按時間排序的文章列表
+const latestArticles = computed(() => {
+  return articles.value;
+});
+
+// 熱門文章：需要單獨獲取按熱門度排序的文章
+const popularArticles = ref([]);
+
+// 載入熱門文章
+const loadPopularArticles = async () => {
+  try {
+    const response = await axios.get('/api/articles?page=1&per_page=15&sort_by=popularity');
+    const validArticles = (response.data.data || []).filter(isValidArticle);
+    popularArticles.value = validArticles.slice(0, 10);
+  } catch (error) {
+    console.error("無法載入熱門文章:", error);
+  }
+};
+
+// 統計資訊
+const stats = computed(() => {
+  return { 
+    totalArticles: totalArticles.value, 
+    totalViews: totalViews.value, 
+    avgCredibility: avgCredibility.value
+  };
+});
 </script>
 
 <template>
   <main class="bg-white">
-    <FeaturedArticleHero v-if="carouselArticles.length" :articles="carouselArticles" />
-    <div class="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
-      <div class="grid grid-cols-1 lg:grid-cols-10 lg:gap-8">
-        <div class="lg:col-span-7">
-          <h2 class="text-2xl font-bold text-gray-900 mb-4">最新新聞</h2>
-          <div v-if="isLoading">載入中...</div>
-          <div v-else class="space-y-6">
-            <ArticleListItem v-for="article in latestArticles" :key="article.id" :article="article" />
+    <!-- 統計資訊橫條 -->
+    <div class="bg-gradient-to-r from-blue-600 to-blue-800 text-white py-2 sm:py-3 md:py-4">
+      <div class="max-w-7xl mx-auto px-3 sm:px-4 lg:px-8">
+        <div class="grid grid-cols-3 gap-1 sm:gap-2 md:gap-4 lg:gap-8 text-center">
+          <div class="flex flex-col items-center">
+            <span class="text-base sm:text-lg md:text-xl lg:text-2xl font-bold">{{ stats.totalArticles }}</span>
+            <span class="text-xs sm:text-sm opacity-90">總文章數</span>
+          </div>
+          <div class="flex flex-col items-center">
+            <span class="text-base sm:text-lg md:text-xl lg:text-2xl font-bold">{{ stats.totalViews.toLocaleString() }}</span>
+            <span class="text-xs sm:text-sm opacity-90">總觀看次數</span>
+          </div>
+          <div class="flex flex-col items-center">
+            <span class="text-base sm:text-lg md:text-xl lg:text-2xl font-bold">{{ stats.avgCredibility }}%</span>
+            <span class="text-xs sm:text-sm opacity-90">平均可信度</span>
           </div>
         </div>
-        <aside class="lg:col-span-3 mt-8 lg:mt-0">
+      </div>
+    </div>
+
+    <FeaturedArticleHero v-if="carouselArticles.length > 0" :articles="carouselArticles" />
+    
+    <div class="max-w-7xl mx-auto py-3 sm:py-4 md:py-6 lg:py-8 px-3 sm:px-4 lg:px-8">
+      <div class="grid grid-cols-1 lg:grid-cols-10 lg:gap-6 xl:gap-8">
+        <div class="lg:col-span-7">
+          <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-3 sm:mb-4 md:mb-6 gap-2">
+            <h2 class="text-lg sm:text-xl md:text-2xl font-bold text-gray-900">最新新聞</h2>
+            <div class="text-xs sm:text-sm text-gray-500">
+              第 {{ currentPage }} 頁，顯示 {{ articles.length }} 篇，共 {{ totalArticles }} 篇
+            </div>
+          </div>
+          
+          <div v-if="isLoading" class="text-center py-6 sm:py-8 md:py-12">
+            <div class="animate-spin w-6 h-6 sm:w-8 sm:h-8 border-4 border-blue-500 border-t-transparent rounded-full mx-auto mb-3 sm:mb-4"></div>
+            <p class="text-sm sm:text-base text-gray-500">載入中...</p>
+          </div>
+          
+          <div v-else-if="latestArticles.length === 0" class="text-center py-6 sm:py-8 md:py-12">
+            <svg class="w-12 h-12 sm:w-16 sm:h-16 text-gray-300 mx-auto mb-3 sm:mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            <p class="text-sm sm:text-base text-gray-500">暫無最新文章</p>
+          </div>
+          
+          <div v-else class="space-y-3 sm:space-y-4 md:space-y-6">
+            <ArticleListItem v-for="article in latestArticles" :key="article.id" :article="article" />
+            
+            <!-- 載入更多按鈕 -->
+            <div v-if="hasMore" class="text-center pt-4 sm:pt-6 md:pt-8">
+              <button 
+                @click="loadMore"
+                :disabled="isLoadingMore"
+                class="inline-flex items-center px-3 sm:px-4 md:px-6 py-2 sm:py-3 border border-transparent text-sm sm:text-base font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                <svg v-if="isLoadingMore" class="animate-spin -ml-1 mr-2 sm:mr-3 h-4 w-4 sm:h-5 sm:w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                {{ isLoadingMore ? '載入中...' : '載入更多文章' }}
+              </button>
+            </div>
+            
+            <!-- 已載入全部文章提示 -->
+            <div v-else class="text-center py-4 sm:py-6 md:py-8">
+              <div class="text-gray-500">
+                <svg class="w-6 h-6 sm:w-8 sm:h-8 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <p class="text-sm sm:text-base">已載入全部 {{ totalArticles }} 篇文章</p>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <aside class="lg:col-span-3 mt-4 sm:mt-6 lg:mt-0">
           <SidebarWidget title="熱門新聞">
             <PopularNewsList :articles="popularArticles" />
           </SidebarWidget>
+          
+          <!-- 額外的側邊欄資訊 -->
+          <div class="mt-3 sm:mt-4 md:mt-6 bg-gray-50 rounded-lg p-3 sm:p-4">
+            <h3 class="text-sm sm:text-base md:text-lg font-semibold text-gray-800 mb-2 sm:mb-3">平台資訊</h3>
+            <div class="space-y-1 sm:space-y-2 text-xs sm:text-sm text-gray-600">
+              <div class="flex justify-between">
+                <span>總文章數</span>
+                <span class="font-medium">{{ totalArticles }}</span>
+              </div>
+              <div class="flex justify-between">
+                <span>已載入文章</span>
+                <span class="font-medium">{{ articles.length }}</span>
+              </div>
+              <div class="flex justify-between">
+                <span>熱門文章</span>
+                <span class="font-medium">{{ popularArticles.length }}</span>
+              </div>
+              <div class="flex justify-between">
+                <span>平台平均可信度</span>
+                <span class="font-medium">{{ stats.avgCredibility }}%</span>
+              </div>
+            </div>
+          </div>
         </aside>
       </div>
     </div>
