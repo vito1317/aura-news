@@ -47,10 +47,10 @@ class ArticleController extends Controller
         $articles = $query->paginate($perPage);
 
         return response()->json([
-            'data' => $articles->toArray(),
+            'data' => $articles->items(),
             'total' => $total,
-            'current_page' => $paginator->currentPage(),
-            'last_page' => $paginator->lastPage(),
+            'current_page' => $articles->currentPage(),
+            'last_page' => $articles->lastPage(),
             'per_page' => $perPage,
             'message' => 'Articles retrieved successfully'
         ]);
