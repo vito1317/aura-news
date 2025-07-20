@@ -25,9 +25,9 @@ const formatDate = (dateString) => new Date(dateString).toLocaleDateString();
       <div class="text-xs text-gray-500 mb-1">
         <!-- 桌面版：水平排列 -->
         <div class="hidden sm:flex sm:items-center sm:space-x-2">
-          <span v-if="article.category" class="font-medium text-brand-DEFAULT">{{ article.category.name }}</span>
-          <span v-if="article.category">·</span>
-          <span>{{ formatDate(article.published_at) }}</span>
+        <span v-if="article.category" class="font-medium text-brand-DEFAULT">{{ article.category.name }}</span>
+        <span v-if="article.category">·</span>
+        <span>{{ formatDate(article.published_at) }}</span>
           <span v-if="article.popularity_score" class="flex items-center space-x-1">
             <span>·</span>
             <svg class="w-3 h-3 text-orange-500" fill="currentColor" viewBox="0 0 20 20">

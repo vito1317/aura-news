@@ -195,7 +195,7 @@ class ProcessArticleData implements ShouldQueue
                     $cleanContent = $joined;
                     \Log::info('UDN 內容擷取成功，長度: ' . mb_strlen($joined));
                 }
-            }
+                }
             }
             // 特殊處理：Yahoo 新聞網
             elseif (strpos($finalUrl, 'yahoo.com') !== false) {

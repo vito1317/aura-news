@@ -17,7 +17,7 @@ const perPage = 12;
 
 const fetchCategoryArticles = async (slug, page = 1, append = false) => {
   if (page === 1) {
-    isLoading.value = true;
+  isLoading.value = true;
   } else {
     isLoadingMore.value = true;
   }
@@ -31,7 +31,7 @@ const fetchCategoryArticles = async (slug, page = 1, append = false) => {
       articles.value.push(...response.data.articles.data);
     } else {
       // 初始載入：替換整個列表
-      articles.value = response.data.articles.data;
+    articles.value = response.data.articles.data;
     }
     
     pagination.value = response.data.articles;
@@ -78,8 +78,8 @@ watch(() => route.params.slug, (newSlug) => {
       <div v-else-if="category">
         <div class="flex items-center justify-between mb-8">
           <h1 class="text-3xl font-bold text-gray-900">
-            分類：{{ category.name }}
-          </h1>
+          分類：{{ category.name }}
+        </h1>
           <div class="text-sm text-gray-500">
             第 {{ currentPage }} 頁，顯示 {{ articles.length }} 篇，共 {{ pagination.total || 0 }} 篇
           </div>
