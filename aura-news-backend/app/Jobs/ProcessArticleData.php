@@ -50,7 +50,7 @@ class ProcessArticleData implements ShouldQueue
                 'timeout' => 20,
                 'verify' => false,
                 'headers' => [
-                    'User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/109.0.0.0 Safari/537.36'
+                    'User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36'
                 ],
             ]);
             $finalUrl = $this->article->source_url;
@@ -111,19 +111,73 @@ class ProcessArticleData implements ShouldQueue
                 }
             }
 
-            if (preg_match('/https?:\/\/(?:[\w-]+\.)*yahoo\.com\//i', $finalUrl)) {
-                \Log::info('Yahoo News 特殊處理: 只擷取 div.atoms 內所有 <p>');
-                $atomsDiv = $xpath->query('//*[contains(@class, "atoms")]')->item(0);
-                $yahooText = [];
-                if ($atomsDiv) {
-                    foreach ($atomsDiv->getElementsByTagName('p') as $p) {
-                        $yahooText[] = trim($p->textContent);
+            // 特殊處理：SETN 新聞網
+            if (strpos($finalUrl, 'https://www.setn.com/News.aspx?NewsID=') !== false) {
+                \Log::info('SETN 新聞網特殊處理: 只擷取 div#Content1 內所有 <p>');
+                $content1Div = $xpath->query('//div[@id="Content1"]')->item(0);
+                $setnText = [];
+                if ($content1Div) {
+                    foreach ($content1Div->getElementsByTagName('p') as $p) {
+                        $setnText[] = trim($p->textContent);
                     }
                 }
-                $joined = implode("\n\n", array_filter($yahooText));
+                $joined = implode("\n\n", array_filter($setnText));
                 if (mb_strlen(trim($joined)) > 50) {
                     $cleanContent = nl2br(e($joined));
-                    \Log::info('Yahoo News .atoms 內容擷取成功，長度: ' . mb_strlen($joined));
+                    \Log::info('SETN 新聞網 Content1 內容擷取成功，長度: ' . mb_strlen($joined));
+                }
+            }
+            // 特殊處理：Yahoo 新聞網
+            elseif (strpos($finalUrl, 'yahoo.com') !== false) {
+                \Log::info('Yahoo 新聞網特殊處理: 嘗試多種選擇器');
+                // 嘗試多種可能的選擇器
+                $possibleSelectors = [
+                    '//*[contains(@class, "atoms")]',
+                    '//*[contains(@class, "caas-body")]',
+                    '//*[contains(@class, "article-content")]',
+                    '//*[contains(@class, "content")]',
+                    '//article',
+                    '//*[contains(@class, "story-body")]',
+                    '//*[contains(@class, "article-body")]',
+                    '//*[contains(@class, "post-body")]',
+                ];
+                
+                $yahooText = [];
+                $usedSelector = '';
+                
+                foreach ($possibleSelectors as $selector) {
+                    $contentDiv = $xpath->query($selector)->item(0);
+                    if ($contentDiv) {
+                        $pElements = $contentDiv->getElementsByTagName('p');
+                        if ($pElements->length > 0) {
+                            foreach ($pElements as $p) {
+                                $text = trim($p->textContent);
+                                if (!empty($text) && mb_strlen($text) > 10) {
+                                    $yahooText[] = $text;
+                                }
+                            }
+                            $usedSelector = $selector;
+                            break;
+                        }
+                    }
+                }
+                
+                $joined = implode("\n\n", array_filter($yahooText));
+                
+                \Log::info('Yahoo content debug', [
+                    'url' => $finalUrl,
+                    'usedSelector' => $usedSelector,
+                    'pCount' => count($yahooText),
+                    'joinedLength' => mb_strlen($joined),
+                    'joinedSample' => mb_substr($joined, 0, 300),
+                    'yahooText' => array_slice($yahooText, 0, 3), // 只記錄前3個段落
+                ]);
+                
+                if (mb_strlen(trim($joined)) > 50) {
+                    $cleanContent = $joined;
+                    \Log::info('Yahoo 新聞網內容擷取成功，長度: ' . mb_strlen($joined) . ', 選擇器: ' . $usedSelector);
+                } else {
+                    \Log::warning('Yahoo 新聞網內容擷取失敗，嘗試其他方法，長度: ' . mb_strlen($joined));
                 }
             }
 
@@ -133,8 +187,20 @@ class ProcessArticleData implements ShouldQueue
             }
 
             $plainText = trim(strip_tags($cleanContent));
+            
+            // 檢查是否為付費內容
+            if (stripos($plainText, 'ONLY AVAILABLE IN PAID PLANS') !== false || 
+                stripos($plainText, 'PAID PLANS') !== false ||
+                stripos($plainText, 'PREMIUM CONTENT') !== false ||
+                stripos($plainText, 'SUBSCRIBE TO READ') !== false ||
+                stripos($plainText, 'PAY TO READ') !== false ||
+                stripos($plainText, 'MEMBERS ONLY') !== false) {
+                \Log::warning('跳過付費內容文章，article ID: ' . $this->article->id . ', URL: ' . $this->article->source_url);
+                return;
+            }
+            
             if (mb_strlen($plainText) < 100) {
-                \Log::warning('新聞全文過短，略過 AI 生成，article ID: ' . $this->article->id);
+                \Log::warning('文章全文過短，略過 AI 生成，article ID: ' . $this->article->id);
                 return;
             }
 

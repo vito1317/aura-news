@@ -25,6 +25,7 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
 });
 
 Route::get('/articles', [ArticleController::class, 'index']);
+Route::get('/articles/stats', [ArticleController::class, 'stats']);
 Route::get('/categories/{category}/articles', [ArticleSearchController::class, 'getByCategory']);
 Route::get('/search', [ArticleSearchController::class, 'search']);
 Route::get('/categories', [CategoryController::class, 'index'])->name('categories.index');
@@ -42,6 +43,7 @@ Route::get('/test-cors', function () {
 Route::post('/ai/scan-fake-news', [\App\Http\Controllers\Api\AIScanFakeNewsController::class, 'scan']);
 Route::post('/ai/scan-fake-news/start', [\App\Http\Controllers\Api\AIScanFakeNewsController::class, 'start']);
 Route::get('/ai/scan-fake-news/progress/{taskId}', [\App\Http\Controllers\Api\AIScanFakeNewsController::class, 'progress']);
+Route::get('/ai/scan-fake-news/result/{taskId}', [\App\Http\Controllers\Api\AIScanFakeNewsController::class, 'getResult']);
 
 Route::get('/newsdata/search', [NewsDataController::class, 'search']);
 Route::get('/newsdata/latest', [NewsDataController::class, 'latest']);

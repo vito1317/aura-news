@@ -29,3 +29,14 @@ foreach ($categoriesToFetch as $category) {
 Schedule::command('app:prune-articles')->hourlyAt(15);
 
 
+Schedule::command('app:update-popular-articles')
+         ->everyFiveMinutes()
+         ->withoutOverlapping()
+         ->appendOutputTo(storage_path('logs/popular_articles_cron.log'));
+
+Schedule::command('app:update-popular-articles')
+         ->hourlyAt(45)
+         ->withoutOverlapping()
+         ->appendOutputTo(storage_path('logs/popular_articles_hourly.log'));
+
+

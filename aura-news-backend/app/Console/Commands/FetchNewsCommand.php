@@ -14,7 +14,7 @@ class FetchNewsCommand extends Command
 {
     protected $signature = 'app:fetch-news {category=科技} {--api=newsapi} {--language=zh} {--size=20}';
 
-    protected $description = '從 NewsAPI.org 或 NewsData.io 根據指定的分類抓取新聞';
+    protected $description = '從 NewsAPI.org 或 NewsData.io 根據指定的分類抓取新聞和文章';
 
     protected $newsDataService;
 
@@ -134,9 +134,12 @@ class FetchNewsCommand extends Command
                 'category_id' => $category->id,
                 'author' => $fetchedArticle['source']['name'] ?? '未知來源',
                 'status' => 1,
-                'published_at' => Carbon::parse($fetchedArticle['publishedAt'])->setTimezone('Asia/Taipei'),
+                'published_at' => Carbon::parse($fetchedArticle['publishedAt'])->addHours(8)->setTimezone('Asia/Taipei'),
             ]);
             dispatch(new \App\Jobs\ProcessArticleData($article));
+            
+            // 觸發熱門度分析
+            dispatch(new \App\Jobs\UpdatePopularArticles($article->id));
             $count++;
         }
 
@@ -180,11 +183,14 @@ class FetchNewsCommand extends Command
                     'category_id' => $category->id,
                     'author' => $articleData['author'],
                     'status' => 1,
-                    'published_at' => $articleData['published_at'],
+                    'published_at' => Carbon::parse($articleData['published_at'])->addHours(8)->setTimezone('Asia/Taipei'),
                 ]);
 
                 // 觸發文章處理任務
                 dispatch(new \App\Jobs\ProcessArticleData($article));
+                
+                // 觸發熱門度分析
+                dispatch(new \App\Jobs\UpdatePopularArticles($article->id));
                 $count++;
             } catch (\Exception $e) {
                 $this->error("建立文章失敗: " . $e->getMessage());

@@ -9,11 +9,11 @@ class PruneArticlesWithoutSummaryCommand extends Command
 {
     protected $signature = 'app:prune-articles';
 
-    protected $description = '立即刪除所有沒有摘要的文章';
+    protected $description = '立即刪除所有沒有摘要、未分析或可信度為0%的文章';
 
     public function handle()
     {
-        $this->info('開始檢查並清理無摘要或異常內容的文章...');
+        $this->info('開始檢查並清理無摘要、未分析、可信度為0%或異常內容的文章...');
 
         $articlesToDelete = Article::where(function($q) {
             $q->whereNull('summary')
@@ -30,19 +30,22 @@ class PruneArticlesWithoutSummaryCommand extends Command
               ->orWhere('title', 'like', '%{emptyPanelMsg}%')
               ->orWhereNull('content')
               ->orWhere('content', '')
-              ->orWhere('content', 'like', '%{emptyPanelMsg}%');
+              ->orWhere('content', 'like', '%{emptyPanelMsg}%')
+              ->orWhereNull('credibility_score')
+              ->orWhere('credibility_score', 0);
         })->get();
 
         if ($articlesToDelete->isEmpty()) {
-            $this->info('所有文章都已成功生成摘要且內容正常，無需清理。');
+            $this->info('所有文章都已成功生成摘要、完成分析且內容正常，無需清理。');
             return 0;
         }
 
         $count = $articlesToDelete->count();
-        $this->warn("找到 {$count} 篇無摘要或異常內容的文章，準備立即刪除...");
+        $this->warn("找到 {$count} 篇無摘要、未分析、可信度為0%或異常內容的文章，準備立即刪除...");
 
         foreach ($articlesToDelete as $article) {
-            $this->line("正在刪除文章 ID: {$article->id} - 標題: {$article->title}");
+            $credibilityInfo = $article->credibility_score !== null ? "可信度: {$article->credibility_score}%" : "未分析";
+            $this->line("正在刪除文章 ID: {$article->id} - 標題: {$article->title} - {$credibilityInfo}");
             $article->delete();
         }
 

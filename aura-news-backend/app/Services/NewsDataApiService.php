@@ -98,7 +98,7 @@ class NewsDataApiService
         }
 
         try {
-            return Carbon::parse($dateString)->setTimezone('Asia/Taipei');
+            return Carbon::parse($dateString)->addHours(8)->setTimezone('Asia/Taipei');
         } catch (\Exception $e) {
             Log::warning('無法解析日期', ['date' => $dateString]);
             return now();
