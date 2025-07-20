@@ -133,7 +133,7 @@ class ArticleController extends Controller
                 }
                 $joined = implode("\n\n", array_filter($setnText));
                 if (mb_strlen(trim($joined)) > 50) {
-                    $cleanContent = nl2br(e($joined));
+                    $cleanContent = $joined;
                     \Log::info('SETN 新聞網 Content1 內容擷取成功，長度: ' . mb_strlen($joined));
                 }
             }

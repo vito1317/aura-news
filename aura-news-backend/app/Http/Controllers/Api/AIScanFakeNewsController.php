@@ -144,11 +144,17 @@ class AIScanFakeNewsController extends Controller
      */
     public function usageCount()
     {
-        $total = \App\Models\AiScanResult::count();
-        $today = \App\Models\AiScanResult::whereDate('created_at', now()->toDateString())->count();
+        $aiTotal = \App\Models\AiScanResult::count();
+        $aiToday = \App\Models\AiScanResult::whereDate('created_at', now()->toDateString())->count();
+        $articleTotal = \App\Models\Article::count();
+        $articleToday = \App\Models\Article::whereDate('created_at', now()->toDateString())->count();
         return response()->json([
-            'total' => $total,
-            'today' => $today,
+            'ai_total' => $aiTotal,
+            'ai_today' => $aiToday,
+            'article_total' => $articleTotal,
+            'article_today' => $articleToday,
+            'total' => $aiTotal + $articleTotal,
+            'today' => $aiToday + $articleToday,
         ]);
     }
 } 

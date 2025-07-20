@@ -110,7 +110,7 @@ class UpdatePopularArticles implements ShouldQueue
         }
         
         // 基礎分數 (15% 權重)
-        $score += 15;
+        //$score += 15;
         
         return round($score, 2);
     }

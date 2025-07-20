@@ -7,6 +7,28 @@ import { marked } from 'marked';
 import noImage from '@/assets/no-image.jpg';
 import { useHead } from '@vueuse/head';
 
+const renderer = new marked.Renderer();
+renderer.link = function(href, title, text) {
+  href = typeof href === 'string' ? href : '';
+  text = typeof text === 'string' ? text : '';
+  let cleanHref = href.replace(/[),。！？；：\]\[\s]+$/g, '');
+  let cleanText = text.replace(/[),。！？；：\]\[\s]+$/g, '');
+  cleanHref = cleanHref.split(' ')[0];
+  cleanText = cleanText.split(' ')[0];
+  if (!/^https?:\/\//.test(cleanHref)) {
+    cleanHref = 'http://' + cleanHref;
+  }
+  return `<a href="${cleanHref}" target="_blank" rel="noopener noreferrer">${cleanText}</a>`;
+};
+marked.setOptions({ renderer });
+
+// 修正 [url](url) 只顯示一次連結
+function fixMarkdownLinks(md) {
+  return md.replace(/\[([hH][tT][tT][pP][sS]?:\/\/[^\]\s]+)\]\(\1\)/g, function(match, url) {
+    return `<a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>`;
+  });
+}
+
 const route = useRoute();
 const article = ref(null);
 const isLoading = ref(true);
@@ -32,14 +54,16 @@ const imageError = ref(false);
 
 const safeSummary = computed(() => {
   if (article.value && article.value.summary) {
-    const html = marked.parse(article.value.summary);
+    const fixed = fixMarkdownLinks(article.value.summary);
+    const html = marked.parse(fixed);
     return DOMPurify.sanitize(html);
   }
   return '';
 });
 const safeContent = computed(() => {
   if (article.value && article.value.content) {
-    const html = marked.parse(article.value.content);
+    const fixed = fixMarkdownLinks(article.value.content);
+    const html = marked.parse(fixed);
     return DOMPurify.sanitize(html);
   }
   return '';

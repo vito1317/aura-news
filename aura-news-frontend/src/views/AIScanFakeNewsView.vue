@@ -605,11 +605,13 @@ const leave = (el) => {
         <span class="font-bold text-blue-700">今日查證：</span>
         <span>{{ usageCount.today }}</span>
         <span class="ml-2">次</span>
+        <span class="ml-2 text-xs text-gray-400" title="包含AI查證與站內新聞文章">(含AI+文章)</span>
       </div>
       <div class="mt-1 sm:mt-0">
         <span class="font-bold text-blue-700">累積查證：</span>
         <span>{{ usageCount.total }}</span>
         <span class="ml-2">次</span>
+        <span class="ml-2 text-xs text-gray-400" title="包含AI查證與站內新聞文章">(含AI+文章)</span>
       </div>
     </div>
     <div class="mb-8 text-center">

@@ -66,15 +66,12 @@ watch(() => route.query.q, (newQuery) => {
         搜尋結果： "{{ query }}"
       </h1>
       
-      <!-- 載入中狀態 -->
       <div v-if="isLoading" class="text-center py-12">
         <div class="animate-spin w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full mx-auto mb-4"></div>
         <p class="text-gray-500">搜尋中...</p>
       </div>
       
-      <!-- 搜尋結果 -->
       <div v-else-if="articles.length > 0">
-        <!-- 結果統計 -->
         <div class="mb-6 p-4 bg-blue-50 rounded-lg">
           <div class="flex items-center justify-between">
             <div class="text-sm text-blue-700">
@@ -87,12 +84,10 @@ watch(() => route.query.q, (newQuery) => {
           </div>
         </div>
         
-        <!-- 文章列表 -->
         <div class="space-y-6">
           <ArticleListItem v-for="article in articles" :key="article.id" :article="article" />
         </div>
         
-        <!-- 載入更多按鈕 -->
         <div v-if="hasMore" class="text-center pt-8">
           <button 
             @click="loadMore"
@@ -107,7 +102,6 @@ watch(() => route.query.q, (newQuery) => {
           </button>
         </div>
         
-        <!-- 已載入全部結果提示 -->
         <div v-else class="text-center py-8">
           <div class="text-gray-500">
             <svg class="w-8 h-8 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -118,7 +112,6 @@ watch(() => route.query.q, (newQuery) => {
         </div>
       </div>
       
-      <!-- 無結果狀態 -->
       <div v-else class="text-center py-20">
         <svg class="w-16 h-16 text-gray-300 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
