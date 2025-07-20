@@ -138,4 +138,17 @@ class AIScanFakeNewsController extends Controller
             ], 500);
         }
     }
+
+    /**
+     * 取得 AI 假新聞查證使用次數（今日、總計）
+     */
+    public function usageCount()
+    {
+        $total = \App\Models\AiScanResult::count();
+        $today = \App\Models\AiScanResult::whereDate('created_at', now()->toDateString())->count();
+        return response()->json([
+            'total' => $total,
+            'today' => $today,
+        ]);
+    }
 } 

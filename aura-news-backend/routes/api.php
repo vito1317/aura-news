@@ -44,6 +44,7 @@ Route::post('/ai/scan-fake-news', [\App\Http\Controllers\Api\AIScanFakeNewsContr
 Route::post('/ai/scan-fake-news/start', [\App\Http\Controllers\Api\AIScanFakeNewsController::class, 'start']);
 Route::get('/ai/scan-fake-news/progress/{taskId}', [\App\Http\Controllers\Api\AIScanFakeNewsController::class, 'progress']);
 Route::get('/ai/scan-fake-news/result/{taskId}', [\App\Http\Controllers\Api\AIScanFakeNewsController::class, 'getResult']);
+Route::get('ai/scan-fake-news/usage-count', [\App\Http\Controllers\Api\AIScanFakeNewsController::class, 'usageCount']);
 
 Route::get('/newsdata/search', [NewsDataController::class, 'search']);
 Route::get('/newsdata/latest', [NewsDataController::class, 'latest']);

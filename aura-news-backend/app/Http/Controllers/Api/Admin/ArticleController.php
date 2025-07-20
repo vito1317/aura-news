@@ -20,7 +20,6 @@ class ArticleController extends Controller
             ->where('content', '!=', '')
             ->whereRaw('CHAR_LENGTH(content) >= 500')
             ->paginate(10);
-        // 強制分頁 path 為 https
         $articles->setPath(preg_replace('/^http:/', 'https:', $articles->path()));
         return response()->json($articles);
     }
@@ -35,11 +34,11 @@ class ArticleController extends Controller
             'status' => ['required', Rule::in([1, 2, 3])],
             'image_url' => 'nullable|string|url',
             'category_id' => 'required|exists:categories,id',
-            'source_url' => 'nullable|string|url', // 新增允許傳入
+            'source_url' => 'nullable|string|url',
         ]);
 
         $article = Article::create(array_merge($validatedData, [
-            'source_url' => $validatedData['source_url'] ?? null, // 用傳入的，沒有就 null
+            'source_url' => $validatedData['source_url'] ?? null,
             'author' => 'Admin',
             'published_at' => now(),
         ]));
@@ -103,7 +102,6 @@ class ArticleController extends Controller
         $category_id = null;
         $cleanContent = null;
         
-        // 記錄 HTML 長度以便除錯
         \Log::info('開始解析 HTML', [
             'url' => $url,
             'html_length' => strlen($html),

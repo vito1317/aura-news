@@ -185,6 +185,8 @@ const pollProgress = (taskId) => {
         nextTick(() => {
           setupAnimationWhenResultAvailable();
         });
+        // 查證完成後自動更新次數
+        fetchUsageCount();
       }
       
       if (res.data.error) {
@@ -551,9 +553,21 @@ const shareResultLink = async () => {
   }
 };
 
+// 使用次數統計
+const usageCount = ref({ total: 0, today: 0 });
+const fetchUsageCount = async () => {
+  try {
+    const res = await axios.get('/api/ai/scan-fake-news/usage-count');
+    usageCount.value = res.data;
+  } catch (e) {
+    usageCount.value = { total: 0, today: 0 };
+  }
+};
+
 // 組件掛載時檢查 URL 參數
 onMounted(() => {
   loadResultFromUrl();
+  fetchUsageCount();
 });
 
 useHead({
@@ -585,6 +599,19 @@ const leave = (el) => {
 
 <template>
   <div class="max-w-2xl mx-auto py-10 px-4 sm:px-6 lg:px-8">
+    <!-- 使用次數統計 -->
+    <div class="mb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between text-sm text-gray-500">
+      <div>
+        <span class="font-bold text-blue-700">今日查證：</span>
+        <span>{{ usageCount.today }}</span>
+        <span class="ml-2">次</span>
+      </div>
+      <div class="mt-1 sm:mt-0">
+        <span class="font-bold text-blue-700">累積查證：</span>
+        <span>{{ usageCount.total }}</span>
+        <span class="ml-2">次</span>
+      </div>
+    </div>
     <div class="mb-8 text-center">
       <h1 class="text-3xl font-extrabold text-blue-800 mb-2">AI 假新聞即時掃描</h1>
       <p class="text-gray-600">輸入新聞內容或網址，AI 將自動查證並給出可信度與建議。</p>

@@ -45,11 +45,10 @@ function isValidArticle(article) {
 
 
 onMounted(async () => {
-  await loadPopularArticles(); // 先載入熱門文章，用於輪播圖
-  await loadArticles(); // 再載入最新文章
+  await loadPopularArticles();
+  await loadArticles();
 });
 
-// 載入文章
 const loadArticles = async (page = 1, append = false) => {
   if (page === 1) {
     isLoading.value = true;
@@ -61,22 +60,17 @@ const loadArticles = async (page = 1, append = false) => {
     const response = await axios.get(`/api/articles?page=${page}&per_page=${perPage}&sort_by=latest`);
     const validArticles = (response.data.data || []).filter(isValidArticle);
     
-    // 儲存總文章數
     totalArticles.value = response.data.total || 0;
     
     if (append) {
-      // 追加模式：直接添加到列表末尾（API已經按時間排序）
       articles.value.push(...validArticles);
     } else {
-      // 初始載入：替換整個列表
       articles.value = validArticles;
     }
     
-    // 更新分頁狀態
     currentPage.value = page;
     hasMore.value = articles.value.length < totalArticles.value;
     
-    // 只在初始載入時獲取統計資料
     if (page === 1) {
       await fetchStats();
     }
@@ -89,13 +83,11 @@ const loadArticles = async (page = 1, append = false) => {
   }
 };
 
-// 載入更多文章
 const loadMore = async () => {
   if (isLoadingMore.value || !hasMore.value) return;
   await loadArticles(currentPage.value + 1, true);
 };
 
-// 獲取統計資料
 const fetchStats = async () => {
   try {
     const response = await axios.get('/api/articles/stats');
@@ -103,7 +95,6 @@ const fetchStats = async () => {
     avgCredibility.value = response.data.avg_credibility || 0;
   } catch (error) {
     console.error("無法載入統計資料:", error);
-    // 如果API失敗，使用當前文章的資料作為備用
     totalViews.value = articles.value.reduce((sum, article) => sum + (article.view_count || 0), 0);
     avgCredibility.value = articles.value.length > 0 
       ? Math.round(articles.value.reduce((sum, article) => sum + (article.credibility_score || 0), 0) / articles.value.length)
@@ -111,22 +102,18 @@ const fetchStats = async () => {
   }
 };
 
-// 輪播文章：最熱門的4篇（只顯示有熱門度分數的文章）
 const carouselArticles = computed(() => 
   popularArticles.value
     .filter(article => article.popularity_score && article.popularity_score > 0)
     .slice(0, 4)
 );
 
-// 最新文章：直接使用已按時間排序的文章列表
 const latestArticles = computed(() => {
   return articles.value;
 });
 
-// 熱門文章：需要單獨獲取按熱門度排序的文章
 const popularArticles = ref([]);
 
-// 載入熱門文章
 const loadPopularArticles = async () => {
   try {
     const response = await axios.get('/api/articles?page=1&per_page=15&sort_by=popularity');
@@ -137,7 +124,6 @@ const loadPopularArticles = async () => {
   }
 };
 
-// 統計資訊
 const stats = computed(() => {
   return { 
     totalArticles: totalArticles.value, 
@@ -149,7 +135,6 @@ const stats = computed(() => {
 
 <template>
   <main class="bg-white">
-    <!-- 統計資訊橫條 -->
     <div class="bg-gradient-to-r from-blue-600 to-blue-800 text-white py-2 sm:py-3 md:py-4">
       <div class="max-w-7xl mx-auto px-3 sm:px-4 lg:px-8">
         <div class="grid grid-cols-3 gap-1 sm:gap-2 md:gap-4 lg:gap-8 text-center">
@@ -159,7 +144,7 @@ const stats = computed(() => {
           </div>
           <div class="flex flex-col items-center">
             <span class="text-base sm:text-lg md:text-xl lg:text-2xl font-bold">{{ stats.totalViews.toLocaleString() }}</span>
-            <span class="text-xs sm:text-sm opacity-90">總觀看次數</span>
+            <span class="text-xs sm:text-sm opacity-90">文章總觀看次數</span>
           </div>
           <div class="flex flex-col items-center">
             <span class="text-base sm:text-lg md:text-xl lg:text-2xl font-bold">{{ stats.avgCredibility }}%</span>
@@ -196,7 +181,6 @@ const stats = computed(() => {
           <div v-else class="space-y-3 sm:space-y-4 md:space-y-6">
             <ArticleListItem v-for="article in latestArticles" :key="article.id" :article="article" />
             
-            <!-- 載入更多按鈕 -->
             <div v-if="hasMore" class="text-center pt-4 sm:pt-6 md:pt-8">
               <button 
                 @click="loadMore"
@@ -211,7 +195,6 @@ const stats = computed(() => {
               </button>
             </div>
             
-            <!-- 已載入全部文章提示 -->
             <div v-else class="text-center py-4 sm:py-6 md:py-8">
               <div class="text-gray-500">
                 <svg class="w-6 h-6 sm:w-8 sm:h-8 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -228,7 +211,6 @@ const stats = computed(() => {
             <PopularNewsList :articles="popularArticles" />
           </SidebarWidget>
           
-          <!-- 額外的側邊欄資訊 -->
           <div class="mt-3 sm:mt-4 md:mt-6 bg-gray-50 rounded-lg p-3 sm:p-4">
             <h3 class="text-sm sm:text-base md:text-lg font-semibold text-gray-800 mb-2 sm:mb-3">平台資訊</h3>
             <div class="space-y-1 sm:space-y-2 text-xs sm:text-sm text-gray-600">
