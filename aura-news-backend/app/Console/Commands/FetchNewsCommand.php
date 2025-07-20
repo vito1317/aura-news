@@ -183,7 +183,7 @@ class FetchNewsCommand extends Command
                     'category_id' => $category->id,
                     'author' => $articleData['author'],
                     'status' => 1,
-                    'published_at' => Carbon::parse($articleData['published_at'])->addHours(8)->setTimezone('Asia/Taipei'),
+                    'published_at' => Carbon::parse($articleData['published_at'])->setTimezone('Asia/Taipei'),
                 ]);
 
                 // 觸發文章處理任務
