@@ -28,6 +28,10 @@ class ProcessArticleData implements ShouldQueue
 
     public function handle(): void
     {
+        \Log::info('AI 產生新聞 handle 進入時主文長度', [
+            'length' => mb_strlen(strip_tags($this->article->content)),
+            'sample' => mb_substr(strip_tags($this->article->content), 0, 200)
+        ]);
         try {
             \Log::info('處理文章 source_url: ' . $this->article->source_url);
             
@@ -127,6 +131,72 @@ class ProcessArticleData implements ShouldQueue
                     \Log::info('SETN 新聞網 Content1 內容擷取成功，長度: ' . mb_strlen($joined));
                 }
             }
+            // 特殊處理：UDN 新聞網
+            elseif (strpos($finalUrl, 'udn.com/news') !== false) {
+                // 自動轉換 UDN AMP 版網址
+                if (preg_match('#^https://udn.com/news/story/(\d+)/(\d+)$#', $finalUrl, $matches)) {
+                    $finalUrl = "https://udn.com/news/amp/story/{$matches[1]}/{$matches[2]}/";
+                    $guzzle = new GuzzleClient();
+                    $response = $guzzle->request('GET', $finalUrl, [
+                        'timeout' => 20,
+                        'verify' => false,
+                        'headers' => [
+                            'User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36'
+                        ],
+                    ]);
+                    $html = (string) $response->getBody();
+                    $doc = new \DOMDocument();
+                    @$doc->loadHTML('<?xml encoding="utf-8" ?>' . $html);
+                    $xpath = new \DOMXPath($doc);
+                }
+                // UDN AMP 版主文擷取
+                if (strpos($finalUrl, '/news/amp/story/') !== false) {
+                    $mainNode = $xpath->query('//main[contains(@class, "main")]')->item(0);
+                    $udnText = [];
+                    if ($mainNode) {
+                        foreach ($mainNode->getElementsByTagName('p') as $p) {
+                            $udnText[] = trim($doc->saveHTML($p));
+                        }
+                    }
+                    $joined = implode("\n\n", array_filter($udnText));
+                    \Log::info('UDN AMP main <p> joined', ['joined' => mb_substr($joined,0,200), 'length' => mb_strlen(strip_tags($joined))]);
+                    if (mb_strlen(strip_tags($joined)) > 10) {
+                        $cleanContent = $joined;
+                        \Log::info('UDN AMP 內容擷取成功，長度: ' . mb_strlen($joined));
+                    }
+                } else {
+                // 原本的 UDN 擷取流程
+                \Log::info('UDN 新聞網特殊處理: 支援多個主內容 XPath');
+                $mainNode = null;
+                $possibleXPaths = [
+                    '//div[contains(@class, "article-content__editor")]',
+                    '//div[contains(@class, "article-content__paragraph")]',
+                    '//section[contains(@class, "article-content__paragraph")]',
+                    '//section',
+                ];
+                foreach ($possibleXPaths as $xpathStr) {
+                    $mainNode = $xpath->query($xpathStr)->item(0);
+                    if ($mainNode) {
+                        \Log::info('UDN 命中 XPath', ['xpath' => $xpathStr]);
+                        break;
+                    }
+                }
+                if (!$mainNode) {
+                    \Log::warning('UDN 找不到主內容區塊');
+                }
+                $udnText = [];
+                if ($mainNode) {
+                    foreach ($mainNode->getElementsByTagName('p') as $p) {
+                        $udnText[] = trim($doc->saveHTML($p));
+                    }
+                }
+                $joined = implode("\n\n", array_filter($udnText));
+                if (mb_strlen(strip_tags($joined)) > 50) {
+                    $cleanContent = $joined;
+                    \Log::info('UDN 內容擷取成功，長度: ' . mb_strlen($joined));
+                }
+            }
+            }
             // 特殊處理：Yahoo 新聞網
             elseif (strpos($finalUrl, 'yahoo.com') !== false) {
                 \Log::info('Yahoo 新聞網特殊處理: 嘗試多種選擇器');
@@ -180,6 +250,22 @@ class ProcessArticleData implements ShouldQueue
                     \Log::warning('Yahoo 新聞網內容擷取失敗，嘗試其他方法，長度: ' . mb_strlen($joined));
                 }
             }
+            // 特殊處理：LINE TODAY 新聞
+            elseif (strpos($finalUrl, 'today.line.me/tw/v2/article') !== false) {
+                $mainNode = $xpath->query('//article[contains(@class, "news-content")]')->item(0);
+                $lineText = [];
+                if ($mainNode) {
+                    foreach ($mainNode->getElementsByTagName('p') as $p) {
+                        $lineText[] = trim($doc->saveHTML($p));
+                    }
+                }
+                $joined = implode("\n\n", array_filter($lineText));
+                \Log::info('LINE TODAY main <p> joined', ['joined' => mb_substr($joined,0,200), 'length' => mb_strlen(strip_tags($joined))]);
+                if (mb_strlen(strip_tags($joined)) > 10) {
+                    $cleanContent = $joined;
+                    \Log::info('LINE TODAY 內容擷取成功，長度: ' . mb_strlen($joined));
+                }
+            }
 
             if (empty($cleanContent) || trim(strip_tags($cleanContent)) === '') {
                 \Log::warning('主文擷取失敗，fallback 回原本 content: ' . $this->article->content);
@@ -188,6 +274,10 @@ class ProcessArticleData implements ShouldQueue
 
             $plainText = trim(strip_tags($cleanContent));
             
+            \Log::info('AI 產生新聞前主文長度', [
+                'length' => mb_strlen($plainText),
+                'sample' => mb_substr($plainText, 0, 200)
+            ]);
             // 檢查是否為付費內容
             if (stripos($plainText, 'ONLY AVAILABLE IN PAID PLANS') !== false || 
                 stripos($plainText, 'PAID PLANS') !== false ||
@@ -198,8 +288,8 @@ class ProcessArticleData implements ShouldQueue
                 \Log::warning('跳過付費內容文章，article ID: ' . $this->article->id . ', URL: ' . $this->article->source_url);
                 return;
             }
-            
-            if (mb_strlen($plainText) < 100) {
+            // 放寬內容長度判斷
+            if (mb_strlen($plainText) < 80) {
                 \Log::warning('文章全文過短，略過 AI 生成，article ID: ' . $this->article->id);
                 return;
             }

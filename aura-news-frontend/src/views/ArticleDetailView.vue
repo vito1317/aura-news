@@ -532,6 +532,10 @@ const getPopularityLevel = (score) => {
           class="prose prose-lg max-w-none prose-h2:font-bold prose-h2:text-gray-800" 
           v-html="safeContent">
         </div>
+        <div v-if="article.source_url" class="mt-4 text-sm text-gray-500">
+          <span>原文出處：</span>
+          <a :href="article.source_url" target="_blank" rel="noopener noreferrer" class="text-blue-600 underline break-all hover:text-blue-800">{{ article.source_url }}</a>
+        </div>
 
         <div 
           v-if="article.popularity_score" 

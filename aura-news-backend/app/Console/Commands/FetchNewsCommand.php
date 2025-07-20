@@ -123,12 +123,114 @@ class FetchNewsCommand extends Command
                 continue;
             }
 
+            // 特殊處理：UDN 新聞網
+            $content = $fetchedArticle['content'] ?? $fetchedArticle['description'];
+            if (strpos($fetchedArticle['url'], 'udn.com/news') !== false) {
+                $udnUrl = $fetchedArticle['url'];
+                if (preg_match('#^https://udn.com/news/story/(\d+)/(\d+)$#', $udnUrl, $matches)) {
+                    $udnUrl = "https://udn.com/news/amp/story/{$matches[1]}/{$matches[2]}/";
+                    \Log::info('FetchNewsCommand: 自動轉換 UDN AMP 版網址', ['amp_url' => $udnUrl]);
+                }
+                try {
+                    $client = new \GuzzleHttp\Client(['timeout' => 10, 'verify' => false]);
+                    $res = $client->get($udnUrl);
+                    if ($res->getStatusCode() === 200) {
+                        $html = (string) $res->getBody();
+                        $doc = new \DOMDocument();
+                        @$doc->loadHTML('<?xml encoding="utf-8" ?>' . $html);
+                        $xpath = new \DOMXPath($doc);
+                        // UDN AMP 版主文擷取
+                        if (strpos($udnUrl, '/news/amp/story/') !== false) {
+                            $mainNode = $xpath->query('//main[contains(@class, "main")]')->item(0);
+                            $udnText = [];
+                            if ($mainNode) {
+                                foreach ($mainNode->getElementsByTagName('p') as $p) {
+                                    $udnText[] = trim($doc->saveHTML($p));
+                                }
+                            }
+                            $joined = implode("\n\n", array_filter($udnText));
+                            \Log::info('UDN AMP main <p> joined', ['joined' => mb_substr($joined,0,200), 'length' => mb_strlen(strip_tags($joined))]);
+                            if (mb_strlen(strip_tags($joined)) > 10) {
+                                $content = $joined;
+                                \Log::info('UDN AMP 內容擷取成功，長度: ' . mb_strlen($joined));
+                            }
+                        } else {
+                            // 支援多個主內容 XPath
+                            $mainNode = null;
+                            $possibleXPaths = [
+                                '//div[contains(@class, "article-content__editor")]',
+                                '//div[contains(@class, "article-content__paragraph")]',
+                                '//section[contains(@class, "article-content__paragraph")]',
+                                '//section',
+                            ];
+                            foreach ($possibleXPaths as $xpathStr) {
+                                $mainNode = $xpath->query($xpathStr)->item(0);
+                                if ($mainNode) {
+                                    \Log::info('UDN 命中 XPath', ['xpath' => $xpathStr]);
+                                    break;
+                                }
+                            }
+                            if (!$mainNode) {
+                                \Log::warning('UDN 找不到主內容區塊');
+                            }
+                            $udnText = [];
+                            if ($mainNode) {
+                                foreach ($mainNode->getElementsByTagName('p') as $p) {
+                                    $udnText[] = trim($doc->saveHTML($p));
+                                }
+                            }
+                            $joined = implode("\n\n", array_filter($udnText));
+                            if (mb_strlen(strip_tags($joined)) > 50) {
+                                $content = $joined;
+                                \Log::info('UDN 內容擷取成功，長度: ' . mb_strlen($joined));
+                            }
+                        }
+                    }
+                } catch (\Exception $e) {
+                    // 忽略失敗，使用原本內容
+                }
+            }
+
+            // 特殊處理：LINE TODAY 新聞
+            if (strpos($fetchedArticle['url'], 'today.line.me/tw/v2/article') !== false) {
+                try {
+                    $client = new \GuzzleHttp\Client(['timeout' => 10, 'verify' => false]);
+                    $res = $client->get($fetchedArticle['url']);
+                    if ($res->getStatusCode() === 200) {
+                        $html = (string) $res->getBody();
+                        $doc = new \DOMDocument();
+                        @$doc->loadHTML('<?xml encoding="utf-8" ?>' . $html);
+                        $xpath = new \DOMXPath($doc);
+                        $mainNode = $xpath->query('//article[contains(@class, "news-content")]')->item(0);
+                        $lineText = [];
+                        if ($mainNode) {
+                            foreach ($mainNode->getElementsByTagName('p') as $p) {
+                                $lineText[] = trim($doc->saveHTML($p));
+                            }
+                        }
+                        $joined = implode("\n\n", array_filter($lineText));
+                        \Log::info('LINE TODAY main <p> joined', ['joined' => mb_substr($joined,0,200), 'length' => mb_strlen(strip_tags($joined))]);
+                        if (mb_strlen(strip_tags($joined)) > 10) {
+                            $content = $joined;
+                            \Log::info('LINE TODAY 內容擷取成功，長度: ' . mb_strlen($joined));
+                        }
+                    }
+                } catch (\Exception $e) {
+                    // 忽略失敗，使用原本內容
+                }
+            }
+
+            // 在主文最後加上原文出處
+            if (!empty($content) && !empty($fetchedArticle['url'])) {
+                $content .= "\n\n---\n原文出處：<a href='" . $fetchedArticle['url'] . "' target='_blank' rel='noopener noreferrer'>" . $fetchedArticle['url'] . "</a>";
+            }
+
             $this->line("正在建立: " . $fetchedArticle['title']);
             
             $article = Article::create([
                 'source_url' => $fetchedArticle['url'],
                 'title' => $fetchedArticle['title'],
-                'content' => $fetchedArticle['content'] ?? $fetchedArticle['description'],
+                'content' => $content,
                 'image_url' => $fetchedArticle['urlToImage'],
                 'summary' => $fetchedArticle['description'] ?? null,
                 'category_id' => $category->id,

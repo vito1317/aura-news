@@ -114,6 +114,84 @@ class AIScanFakeNewsJob implements ShouldQueue
                         ]);
                     }
                 }
+                // 特殊處理：UDN 新聞網
+                elseif (strpos($url, 'udn.com/news') !== false) {
+                    // 自動轉換 UDN AMP 版網址
+                    if (preg_match('#^https://udn.com/news/story/(\d+)/(\d+)$#', $url, $matches)) {
+                        $url = "https://udn.com/news/amp/story/{$matches[1]}/{$matches[2]}/";
+                        \Log::info('自動轉換 UDN AMP 版網址', ['amp_url' => $url]);
+                    }
+                    $client = new \GuzzleHttp\Client(['timeout' => 10, 'verify' => false]);
+                    try {
+                        $res = $client->get($url, [
+                            'headers' => [
+                                'User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                                'Cookie' => 'udn_papercookie=1;',
+                                'Accept-Language' => 'zh-TW,zh;q=0.9',
+                            ],
+                        ]);
+                        $html = (string) $res->getBody();
+                        \Log::info('UDN raw HTML', ['html_sample' => mb_substr($html, 0, 1000)]);
+                        $doc = new \DOMDocument();
+                        @$doc->loadHTML('<?xml encoding="utf-8" ?>' . $html);
+                        $xpath = new \DOMXPath($doc);
+                        // log 所有 div 的 class
+                        foreach ($doc->getElementsByTagName('div') as $div) {
+                            $class = $div->getAttribute('class');
+                            if ($class) {
+                                \Log::info('UDN div class', ['class' => $class]);
+                            }
+                        }
+                        // 支援多個主內容 class
+                        $mainDiv = null;
+                        $possibleClasses = [
+                            'article-content__editor',
+                            'article-content__paragraph',
+                        ];
+                        foreach ($possibleClasses as $class) {
+                            $mainDiv = $xpath->query('//div[contains(@class, "' . $class . '")]')->item(0);
+                            if ($mainDiv) {
+                                \Log::info('UDN 命中 class', ['class' => $class]);
+                                break;
+                            }
+                        }
+                        if (!$mainDiv) {
+                            \Log::warning('UDN 找不到主內容區塊');
+                        }
+                        $udnText = [];
+                        if ($mainDiv) {
+                            foreach ($mainDiv->getElementsByTagName('p') as $p) {
+                                $pHtml = trim($doc->saveHTML($p));
+                                \Log::info('UDN <p> text', ['text' => $p->textContent, 'html' => $pHtml]);
+                                $udnText[] = $pHtml;
+                            }
+                        }
+                        $joined = implode("\n\n", array_filter($udnText));
+                        \Log::info('UDN joined content', ['joined' => $joined, 'length' => mb_strlen(strip_tags($joined))]);
+                        if (mb_strlen(strip_tags($joined)) > 10) {
+                            $cleanContent = $joined;
+                            \Log::info('UDN 內容擷取成功，長度: ' . mb_strlen($joined));
+                        }
+                        // UDN AMP 版主文擷取
+                        if (strpos($url, '/news/amp/story/') !== false) {
+                            $mainNode = $xpath->query('//main[contains(@class, "main")]')->item(0);
+                            $udnText = [];
+                            if ($mainNode) {
+                                foreach ($mainNode->getElementsByTagName('p') as $p) {
+                                    $udnText[] = trim($doc->saveHTML($p));
+                                }
+                            }
+                            $joined = implode("\n\n", array_filter($udnText));
+                            \Log::info('UDN AMP main <p> joined', ['joined' => mb_substr($joined,0,200), 'length' => mb_strlen(strip_tags($joined))]);
+                            if (mb_strlen(strip_tags($joined)) > 10) {
+                                $cleanContent = $joined;
+                                \Log::info('UDN AMP 內容擷取成功，長度: ' . mb_strlen($joined));
+                            }
+                        }
+                    } catch (\Exception $e) {
+                        \Log::error('UDN 擷取失敗', ['error' => $e->getMessage()]);
+                    }
+                }
                 // 特殊處理：Yahoo 新聞網
                 elseif (strpos($url, 'yahoo.com') !== false) {
                     // 嘗試多種可能的選擇器
@@ -173,6 +251,22 @@ class AIScanFakeNewsJob implements ShouldQueue
                         ]);
                     }
                 }
+                // 特殊處理：LINE TODAY 新聞
+                elseif (strpos($url, 'today.line.me/tw/v2/article') !== false) {
+                    $mainNode = $xpath->query('//article[contains(@class, "news-content")]')->item(0);
+                    $lineText = [];
+                    if ($mainNode) {
+                        foreach ($mainNode->getElementsByTagName('p') as $p) {
+                            $lineText[] = trim($doc->saveHTML($p));
+                        }
+                    }
+                    $joined = implode("\n\n", array_filter($lineText));
+                    \Log::info('LINE TODAY main <p> joined', ['joined' => mb_substr($joined,0,200), 'length' => mb_strlen(strip_tags($joined))]);
+                    if (mb_strlen(strip_tags($joined)) > 10) {
+                        $cleanContent = $joined;
+                        \Log::info('LINE TODAY 內容擷取成功，長度: ' . mb_strlen($joined));
+                    }
+                }
                 if (empty($cleanContent) || trim(strip_tags($cleanContent)) === '') {
                     $cleanContent = null;
                 }
@@ -187,6 +281,11 @@ class AIScanFakeNewsJob implements ShouldQueue
             }
         } else {
             $plainText = trim($this->content);
+        }
+
+        // 若主文擷取成功且有原始網址，於主文最後加上資料來源
+        if ($plainText && preg_match('/^https?:\/\//i', trim($this->content))) {
+            $plainText .= "\n\n---\n資料來源：<a href='" . trim($this->content) . "' target='_blank' rel='noopener noreferrer'>" . trim($this->content) . "</a>";
         }
 
         // 若主文擷取失敗或內容過短，給予提示並結束
@@ -927,6 +1026,72 @@ class AIScanFakeNewsJob implements ShouldQueue
                         $cleanContent = $joined;
                     }
                 }
+                // 特殊處理：UDN 新聞網
+                elseif (strpos($url, 'udn.com/news') !== false) {
+                    // 自動轉換 UDN AMP 版網址
+                    if (preg_match('#^https://udn.com/news/story/(\d+)/(\d+)$#', $url, $matches)) {
+                        $url = "https://udn.com/news/amp/story/{$matches[1]}/{$matches[2]}/";
+                        \Log::info('自動轉換 UDN AMP 版網址', ['amp_url' => $url]);
+                    }
+                    $client = new \GuzzleHttp\Client(['timeout' => 10, 'verify' => false]);
+                    try {
+                        $res = $client->get($url, [
+                            'headers' => [
+                                'User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                                'Cookie' => 'udn_papercookie=1;',
+                                'Accept-Language' => 'zh-TW,zh;q=0.9',
+                            ],
+                        ]);
+                        $html = (string) $res->getBody();
+                        \Log::info('UDN raw HTML', ['html_sample' => mb_substr($html, 0, 1000)]);
+                        $doc = new \DOMDocument();
+                        @$doc->loadHTML('<?xml encoding="utf-8" ?>' . $html);
+                        $xpath = new \DOMXPath($doc);
+                        // log 所有 div 的 class
+                        foreach ($doc->getElementsByTagName('div') as $div) {
+                            $class = $div->getAttribute('class');
+                            if ($class) {
+                                \Log::info('UDN div class', ['class' => $class]);
+                            }
+                        }
+                        $editorDiv = $xpath->query('//div[contains(@class, "article-content__editor")]')->item(0);
+                        if (!$editorDiv) {
+                            \Log::warning('UDN 找不到 article-content__editor');
+                        }
+                        $udnText = [];
+                        if ($editorDiv) {
+                            \Log::info('UDN editorDiv HTML', ['html' => $doc->saveHTML($editorDiv)]);
+                            foreach ($editorDiv->getElementsByTagName('p') as $p) {
+                                $pHtml = trim($doc->saveHTML($p));
+                                \Log::info('UDN <p> text', ['text' => $p->textContent, 'html' => $pHtml]);
+                                $udnText[] = $pHtml;
+                            }
+                        }
+                        $joined = implode("\n\n", array_filter($udnText));
+                        \Log::info('UDN joined content', ['joined' => $joined, 'length' => mb_strlen(strip_tags($joined))]);
+                        if (mb_strlen(strip_tags($joined)) > 10) { // 放寬長度判斷
+                            $cleanContent = $joined;
+                        }
+                        // UDN AMP 版主文擷取
+                        if (strpos($url, '/news/amp/story/') !== false) {
+                            $mainNode = $xpath->query('//main[contains(@class, "main")]')->item(0);
+                            $udnText = [];
+                            if ($mainNode) {
+                                foreach ($mainNode->getElementsByTagName('p') as $p) {
+                                    $udnText[] = trim($doc->saveHTML($p));
+                                }
+                            }
+                            $joined = implode("\n\n", array_filter($udnText));
+                            \Log::info('UDN AMP main <p> joined', ['joined' => mb_substr($joined,0,200), 'length' => mb_strlen(strip_tags($joined))]);
+                            if (mb_strlen(strip_tags($joined)) > 10) {
+                                $cleanContent = $joined;
+                                \Log::info('UDN AMP 內容擷取成功，長度: ' . mb_strlen($joined));
+                            }
+                        }
+                    } catch (\Exception $e) {
+                        \Log::error('UDN 擷取失敗', ['error' => $e->getMessage()]);
+                    }
+                }
                 // 特殊處理：Yahoo 新聞網
                 elseif (strpos($url, 'yahoo.com') !== false) {
                     $possibleSelectors = [
@@ -960,6 +1125,22 @@ class AIScanFakeNewsJob implements ShouldQueue
                     $joined = implode("\n\n", array_filter($yahooText));
                     if (mb_strlen(trim($joined)) > 50) {
                         $cleanContent = $joined;
+                    }
+                }
+                // 特殊處理：LINE TODAY 新聞
+                elseif (strpos($url, 'today.line.me/tw/v2/article') !== false) {
+                    $mainNode = $xpath->query('//article[contains(@class, "news-content")]')->item(0);
+                    $lineText = [];
+                    if ($mainNode) {
+                        foreach ($mainNode->getElementsByTagName('p') as $p) {
+                            $lineText[] = trim($doc->saveHTML($p));
+                        }
+                    }
+                    $joined = implode("\n\n", array_filter($lineText));
+                    \Log::info('LINE TODAY main <p> joined', ['joined' => mb_substr($joined,0,200), 'length' => mb_strlen(strip_tags($joined))]);
+                    if (mb_strlen(strip_tags($joined)) > 10) {
+                        $cleanContent = $joined;
+                        \Log::info('LINE TODAY 內容擷取成功，長度: ' . mb_strlen($joined));
                     }
                 }
                 
