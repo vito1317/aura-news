@@ -43,6 +43,12 @@ const router = createRouter({
       name: 'ai-scan-fake-news',
       component: () => import('../views/AIScanFakeNewsView.vue')
     },
+    {
+      path: '/user/settings',
+      name: 'user-settings',
+      component: () => import('@/views/UserSettingsView.vue'),
+      meta: { requiresAuth: true }
+    },
 
     {
       path: '/admin',

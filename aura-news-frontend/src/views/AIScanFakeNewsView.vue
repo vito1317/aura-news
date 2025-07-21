@@ -175,7 +175,7 @@ const scanFakeNews = async () => {
     pollingInterval = null;
   }
   try {
-    const res = await axios.post('/api/ai/scan-fake-news/start', { content: input.value });
+    const res = await axios.post(`${import.meta.env.VITE_API_BASE}/api/ai/scan-fake-news/start`, { content: input.value });
     if (res.data && res.data.error) {
       error.value = res.data.error;
       isLoading.value = false;
@@ -193,7 +193,7 @@ const scanFakeNews = async () => {
 const pollProgress = (taskId) => {
   pollingInterval = setInterval(async () => {
     try {
-      const res = await axios.get(`/api/ai/scan-fake-news/progress/${taskId}`);
+      const res = await axios.get(`${import.meta.env.VITE_API_BASE}/api/ai/scan-fake-news/progress/${taskId}`);
       progress.value = res.data.progress;
       
       // 檢查是否排隊中
@@ -328,7 +328,7 @@ const loadResultFromUrl = async () => {
   if (taskId) {
     try {
       isLoading.value = true;
-      const res = await axios.get(`/api/ai/scan-fake-news/result/${taskId}`);
+      const res = await axios.get(`${import.meta.env.VITE_API_BASE}/api/ai/scan-fake-news/result/${taskId}`);
       
       if (res.data.success) {
         const data = res.data.data;
@@ -637,7 +637,7 @@ const shareResultLink = async () => {
 const usageCount = ref({ total: 0, today: 0 });
 const fetchUsageCount = async () => {
   try {
-    const res = await axios.get('/api/ai/scan-fake-news/usage-count');
+    const res = await axios.get(`${import.meta.env.VITE_API_BASE}/api/ai/scan-fake-news/usage-count`);
     usageCount.value = res.data;
   } catch (e) {
     usageCount.value = { total: 0, today: 0 };
@@ -709,7 +709,7 @@ const confidenceLevel = computed(() => {
     </div>
     <div class="bg-white rounded-xl shadow p-6 mb-6">
       <label class="block text-gray-700 font-semibold mb-2" for="news-input">新聞內容或網址</label>
-      <textarea id="news-input" v-model="input" rows="6" class="w-full border-2 border-blue-200 focus:border-blue-500 rounded-lg p-3 transition" placeholder="請貼上新聞內容或網址..." :disabled="isLoading"></textarea>
+      <textarea id="news-input" v-model="input" rows="6" class="w-full border-2 border-blue-200 focus:border-blue-500 rounded-lg p-3 transition" placeholder="請貼上新聞內容或網址...支援三立新聞、Yahoo新聞、Line Today新聞、Ettoday新聞、Cnbeta等等..." :disabled="isLoading"></textarea>
       <button @click="scanFakeNews" :disabled="isLoading" class="mt-4 w-full flex justify-center items-center bg-gradient-to-r from-blue-600 to-blue-400 hover:from-blue-700 hover:to-blue-500 text-white font-bold py-2.5 rounded-lg disabled:opacity-50 transition">
         <svg v-if="isLoading" class="animate-spin h-5 w-5 mr-2 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"></path></svg>
         {{ isLoading ? 'AI 掃描中...' : '開始掃描' }}

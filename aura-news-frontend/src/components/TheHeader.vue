@@ -2,7 +2,9 @@
 import { ref, onMounted } from 'vue';
 import { RouterLink, useRouter } from 'vue-router';
 import axios from 'axios';
+import { useAuthStore } from '@/stores/auth';
 
+const authStore = useAuthStore();
 const router = useRouter();
 const searchQuery = ref('');
 const navLinks = ref([]);
@@ -19,9 +21,10 @@ const handleSearch = () => {
     searchQuery.value = '';
   }
 };
+const API_BASE = import.meta.env.VITE_API_BASE || 'https://api-news.vito1317.com';
 onMounted(async () => {
   try {
-    const response = await axios.get('/api/categories');
+    const response = await axios.get(`${API_BASE}/api/categories`);
     const homeLink = { name: '首頁', path: '/', slug: null };
     const aiScanLink = { name: 'AI 假新聞查證', path: '/ai-scan-fake-news', slug: 'ai-scan-fake-news' };
     const categoryLinks = response.data.map(cat => ({
@@ -69,10 +72,23 @@ onMounted(async () => {
               <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
             </button>
           </form>
-          <!-- 使用者圖示 -->
-          <RouterLink to="/login" class="ml-4 text-gray-500 hover:text-brand-DEFAULT transition-colors">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
-          </RouterLink>
+          <!-- 使用者區塊 -->
+          <template v-if="authStore.isAuthenticated">
+            <div class="ml-4 flex items-center space-x-2">
+              <span class="text-gray-700 font-semibold">{{ authStore.user.nickname }}</span>
+              <RouterLink to="/user/settings" class="text-gray-500 hover:text-blue-600" title="用戶設定">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m0 14v1m8-8h1M4 12H3m15.364-7.364l-.707.707M6.343 17.657l-.707.707M17.657 17.657l-.707-.707M6.343 6.343l-.707-.707" /></svg>
+              </RouterLink>
+              <button @click="authStore.logout()" class="text-gray-500 hover:text-red-600" title="登出">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1m0-10V5" /></svg>
+              </button>
+            </div>
+          </template>
+          <template v-else>
+            <RouterLink to="/login" class="ml-4 text-gray-500 hover:text-brand-DEFAULT transition-colors">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+            </RouterLink>
+          </template>
           <!-- 手機版漢堡選單按鈕 (只在 md 以下的螢幕顯示) -->
           <div class="ml-2 md:hidden">
             <button @click="isMenuOpen = !isMenuOpen" class="inline-flex items-center justify-center p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-brand-DEFAULT">

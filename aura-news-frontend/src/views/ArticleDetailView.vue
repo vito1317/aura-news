@@ -1,11 +1,13 @@
 <script setup>
-import { ref, onMounted, onUnmounted, computed, watch, nextTick } from 'vue';
-import { useRoute } from 'vue-router';
+import { ref, onMounted, onUnmounted, computed, watch, nextTick, reactive } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 import axios from 'axios';
 import DOMPurify from 'dompurify';
 import { marked } from 'marked';
 import noImage from '@/assets/no-image.jpg';
 import { useHead } from '@vueuse/head';
+import { useAuthStore } from '@/stores/auth';
+import { markArticleAsRead } from '../api/article.js';
 
 const renderer = new marked.Renderer();
 renderer.link = function(href, title, text) {
@@ -139,8 +141,10 @@ watch(article, (val) => {
         { property: 'og:type', content: 'article' },
         { property: 'og:image', content: val.image_url || '/favicon.ico' },
         { property: 'og:url', content: typeof window !== 'undefined' ? window.location.href : '' },
-        { name: 'twitter:card', content: 'summary_large_image' }
-      ],
+        { name: 'twitter:card', content: 'summary_large_image' },
+        // 新增 keywords meta tag
+        val.keywords ? { name: 'keywords', content: val.keywords } : null
+      ].filter(Boolean),
       script: [
         {
           type: 'application/ld+json',
@@ -206,7 +210,7 @@ const fetchCredibility = async () => {
   if (!article.value) return;
   
   try {
-    const response = await axios.get(`https://api-news.vito1317.com/api/articles/${article.value.id}/credibility`);
+    const response = await axios.get(`${import.meta.env.VITE_API_BASE}/api/articles/${article.value.id}/credibility`);
     credibilityData.value = response.data;
   } catch (err) {
     if (err.response?.status === 404) {
@@ -225,7 +229,7 @@ const triggerCredibilityAnalysis = async () => {
   analysisProgress.value = '';
   
   try {
-    const response = await axios.post(`https://api-news.vito1317.com/api/articles/${article.value.id}/credibility/analyze`);
+    const response = await axios.post(`${import.meta.env.VITE_API_BASE}/api/articles/${article.value.id}/credibility/analyze`);
     
     if (response.data.taskId) {
       pollAnalysisProgress(response.data.taskId);
@@ -242,7 +246,7 @@ const triggerCredibilityAnalysis = async () => {
 const pollAnalysisProgress = (taskId) => {
   pollingInterval = setInterval(async () => {
     try {
-      const response = await axios.get(`https://api-news.vito1317.com/api/articles/credibility/progress/${taskId}`);
+      const response = await axios.get(`${import.meta.env.VITE_API_BASE}/api/articles/credibility/progress/${taskId}`);
       
       if (response.data.progress === '完成' && response.data.result) {
         clearInterval(pollingInterval);
@@ -270,12 +274,87 @@ const pollAnalysisProgress = (taskId) => {
   }, 2000);
 };
 
+// 留言板狀態
+const comments = ref([]);
+const commentForm = reactive({ user_name: '', content: '' });
+const commentLoading = ref(false);
+const commentError = ref('');
+
+const authStore = useAuthStore();
+
+async function fetchComments() {
+  if (!article.value) return;
+  try {
+    const res = await axios.get(`${import.meta.env.VITE_API_BASE}/api/articles/${article.value.id}/comments`);
+    comments.value = res.data;
+  } catch (e) {
+    commentError.value = '留言載入失敗';
+  }
+}
+
+async function submitComment() {
+  if (!authStore.isAuthenticated) {
+    commentError.value = '請先登入才能留言';
+    return;
+  }
+  if (!commentForm.content.trim()) {
+    commentError.value = '請輸入留言內容';
+    return;
+  }
+  commentLoading.value = true;
+  commentError.value = '';
+  try {
+    await axios.post(`${import.meta.env.VITE_API_BASE}/api/articles/${article.value.id}/comments`, {
+      content: commentForm.content,
+    });
+    commentForm.content = '';
+    await fetchComments();
+  } catch (e) {
+    commentError.value = '留言送出失敗';
+  } finally {
+    commentLoading.value = false;
+  }
+}
+
+watch(article, () => {
+  fetchComments();
+});
+
+const canDeleteComment = (c) => {
+  return authStore.isAuthenticated && (authStore.user.role === 'admin' || c.user_id === authStore.user.id);
+};
+
+async function deleteComment(commentId) {
+  if (!confirm('確定要刪除這則留言嗎？')) return;
+  try {
+    await axios.delete(`${import.meta.env.VITE_API_BASE}/api/comments/${commentId}`);
+    await fetchComments();
+  } catch (e) {
+    alert('刪除失敗');
+  }
+}
+
+async function deleteAllComments() {
+  if (!confirm('確定要刪除所有留言嗎？')) return;
+  try {
+    await axios.delete(`${import.meta.env.VITE_API_BASE}/api/comments`);
+    await fetchComments();
+  } catch (e) {
+    alert('刪除全部留言失敗');
+  }
+}
+
 onMounted(async () => {
   const articleId = route.params.id;
   try {
-    const response = await axios.get(`https://api-news.vito1317.com/api/articles/${articleId}`);
+    const response = await axios.get(`${import.meta.env.VITE_API_BASE}/api/articles/${articleId}`);
     article.value = response.data;
-    
+
+    // 新增：上報閱讀紀錄
+    if (article.value?.id) {
+      await markArticleAsRead(article.value.id);
+    }
+
     await fetchCredibility();
     
     await nextTick();
@@ -472,6 +551,10 @@ const getPopularityLevel = (score) => {
   return '極低熱門度';
 };
 
+function searchByKeyword(kw) {
+  router.push({ name: 'search', query: { q: kw.trim() } });
+}
+
 
 </script>
 
@@ -492,6 +575,16 @@ const getPopularityLevel = (score) => {
         <h1 class="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold text-gray-900 leading-tight mb-3 sm:mb-4">
           {{ article.title }}
         </h1>
+        <div v-if="article.keywords" class="mb-4 flex flex-wrap gap-2">
+          <span
+            v-for="kw in article.keywords.split(',')"
+            :key="kw"
+            class="inline-block bg-blue-100 text-blue-700 px-2 py-1 rounded text-xs font-medium cursor-pointer hover:bg-blue-200 hover:text-blue-900 transition"
+            @click="searchByKeyword(kw)"
+          >
+            #{{ kw.trim() }}
+          </span>
+        </div>
         <div class="text-xs sm:text-sm text-gray-500 mb-6 sm:mb-8">
           <!-- 桌面版：水平排列 -->
           <div class="hidden sm:flex sm:items-center sm:gap-4">
@@ -798,6 +891,35 @@ const getPopularityLevel = (score) => {
               <button class="bg-gray-200 hover:bg-gray-300 text-gray-700 px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg transition-colors text-xs sm:text-sm" @click="() => share('twitter')">Twitter</button>
               <button class="bg-gray-200 hover:bg-gray-300 text-gray-700 px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg transition-colors text-xs sm:text-sm" @click="() => share('line')">Line</button>
             </div>
+          </div>
+        </div>
+
+        <!-- 新增：留言板區塊 -->
+        <div class="mt-10 sm:mt-14">
+          <div class="bg-white rounded-xl shadow p-6 border border-gray-100">
+            <h3 class="text-lg sm:text-xl font-bold text-blue-800 mb-4 flex items-center">
+              <svg class="w-5 h-5 mr-2 text-blue-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M17 8h2a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2v-8a2 2 0 012-2h2M15 3h-6a2 2 0 00-2 2v3a2 2 0 002 2h6a2 2 0 002-2V5a2 2 0 00-2-2z"/></svg>
+              留言板
+              <button v-if="authStore.isAdmin" @click="deleteAllComments" class="ml-4 px-3 py-1 bg-red-500 text-white rounded hover:bg-red-700 text-xs">刪除全部留言</button>
+            </h3>
+            <form @submit.prevent="submitComment" class="mb-6 flex flex-col sm:flex-row gap-2 sm:gap-4">
+              <input v-if="authStore.isAuthenticated" :value="authStore.user.nickname" disabled class="border border-gray-300 rounded-lg px-3 py-2 w-full sm:w-40 bg-gray-100 text-gray-500" />
+              <input v-else value="請先登入" disabled class="border border-gray-300 rounded-lg px-3 py-2 w-full sm:w-40 bg-gray-100 text-gray-400" />
+              <textarea v-model="commentForm.content" maxlength="1000" placeholder="留言內容..." rows="2" class="border border-gray-300 rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 focus:ring-blue-200 resize-none" :disabled="commentLoading || !authStore.isAuthenticated"></textarea>
+              <button type="submit" :disabled="commentLoading || !authStore.isAuthenticated" class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-5 py-2 rounded-lg transition-colors disabled:opacity-50">送出</button>
+            </form>
+            <div v-if="commentError" class="text-red-600 mb-4">{{ commentError }}</div>
+            <div v-if="comments.length === 0" class="text-gray-400 text-center py-6">目前沒有留言，快來搶頭香！</div>
+            <ul v-else class="space-y-4">
+              <li v-for="c in comments" :key="c.id" class="border-b border-gray-100 pb-3">
+                <div class="flex items-center mb-1">
+                  <span class="font-bold text-blue-700 mr-2">{{ c.display_name }}</span>
+                  <span class="text-xs text-gray-400">{{ new Date(c.created_at).toLocaleString('zh-TW') }}</span>
+                  <button v-if="canDeleteComment(c)" @click="deleteComment(c.id)" class="ml-2 text-xs text-red-500 hover:underline">刪除</button>
+                </div>
+                <div class="text-gray-800 whitespace-pre-line break-words">{{ c.content }}</div>
+              </li>
+            </ul>
           </div>
         </div>
       </article>

@@ -23,6 +23,7 @@ const form = ref({
   status: 1,
   image_url: null,
   category_id: null,
+  keywords: '',
 });
 
 const categories = ref([]);
@@ -228,6 +229,10 @@ watch(mode, (newMode) => {
           <option :value="2">草稿</option>
           <option :value="3">待審核</option>
         </select>
+      </div>
+      <div>
+        <label for="keywords" class="block text-sm font-medium text-gray-700">關鍵字 (逗號分隔)</label>
+        <input type="text" id="keywords" v-model="form.keywords" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm">
       </div>
       <div class="text-right">
         <button type="submit" :disabled="isSubmitting" class="bg-blue-600 hover:bg-blue-800 text-white font-bold py-2.5 px-8 rounded-lg shadow-lg text-lg transition-all duration-150 disabled:opacity-50 border-2 border-blue-600 w-full sm:w-auto">{{ isSubmitting ? '儲存中...' : '儲存文章' }}</button>

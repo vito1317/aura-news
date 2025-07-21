@@ -326,6 +326,16 @@ class ArticleController extends Controller
         } catch (\Exception $e) {
             return response()->json(['message' => 'AI 產生失敗: ' . $e->getMessage()], 500);
         }
+        // 產生關鍵字
+        $keywords = null;
+        try {
+            $gemini = resolve(\Gemini\Client::class);
+            $prompt = "請根據以下新聞內容，產生3~5個適合用於分類與推薦的繁體中文關鍵字或短語，僅回傳關鍵字本身，用逗號分隔：\n\n" . strip_tags($markdownContent);
+            $result = $gemini->generativeModel('gemini-2.5-flash-lite-preview-06-17')->generateContent($prompt);
+            $keywords = trim(str_replace(["\n", "。", "，"], [',', '', ','], $result->text()));
+        } catch (\Exception $e) {
+            $keywords = null;
+        }
         return response()->json([
             'title' => $title,
             'content' => $markdownContent,
@@ -333,6 +343,7 @@ class ArticleController extends Controller
             'image_url' => $image_url,
             'category_id' => $category_id,
             'source_url' => $url, // 回傳原始網址
+            'keywords' => $keywords,
         ]);
     }
 }

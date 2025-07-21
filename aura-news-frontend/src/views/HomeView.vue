@@ -5,7 +5,10 @@ import FeaturedArticleHero from '@/components/FeaturedArticleHero.vue';
 import ArticleListItem from '@/components/ArticleListItem.vue';
 import SidebarWidget from '@/components/SidebarWidget.vue';
 import PopularNewsList from '@/components/PopularNewsList.vue';
+import MarqueeNews from '@/components/MarqueeNews.vue';
+import RecommendedArticles from '@/components/RecommendedArticles.vue';
 import { useHead } from '@vueuse/head';
+import { fetchRecommendedArticles } from '@/api/article.js';
 
 useHead({
   title: 'Aura News - AI 新聞平台',
@@ -28,7 +31,8 @@ const isLoading = ref(true);
 const currentPage = ref(1);
 const hasMore = ref(true);
 const isLoadingMore = ref(false);
-const perPage = 12;
+const perPage = 36;
+const API_BASE = import.meta.env.VITE_API_BASE || 'https://api-news.vito1317.com';
 
 function isValidArticle(article) {
   const invalidMsg = '{emptyPanelMsg}';
@@ -47,6 +51,15 @@ function isValidArticle(article) {
 onMounted(async () => {
   await loadPopularArticles();
   await loadArticles();
+  // 先取推薦
+  const rec = (await fetchRecommendedArticles()).slice(0, 3).map(a => ({ ...a, carouselType: '推薦' }));
+  // 最新排除已在推薦的
+  const latest = articles.value.filter(a => !rec.some(r => r.id === a.id)).slice(0, 3).map(a => ({ ...a, carouselType: '最新' }));
+  // 熱門排除已在推薦/最新的
+  const hot = popularArticles.value.filter(a => !rec.some(r => r.id === a.id) && !latest.some(l => l.id === a.id)).slice(0, 3).map(a => ({ ...a, carouselType: '熱門' }));
+  recommendedArticles.value = rec;
+  latestArticlesForHero.value = latest;
+  popularArticlesForHero.value = hot;
 });
 
 const loadArticles = async (page = 1, append = false) => {
@@ -57,7 +70,7 @@ const loadArticles = async (page = 1, append = false) => {
   }
   
   try {
-    const response = await axios.get(`/api/articles?page=${page}&per_page=${perPage}&sort_by=latest`);
+    const response = await axios.get(`${API_BASE}/api/articles?page=${page}&per_page=${perPage}&sort_by=latest`);
     const validArticles = (response.data.data || []).filter(isValidArticle);
     
     totalArticles.value = response.data.total || 0;
@@ -90,7 +103,7 @@ const loadMore = async () => {
 
 const fetchStats = async () => {
   try {
-    const response = await axios.get('/api/articles/stats');
+    const response = await axios.get(`${API_BASE}/api/articles/stats`);
     totalViews.value = response.data.total_views || 0;
     avgCredibility.value = response.data.avg_credibility || 0;
   } catch (error) {
@@ -137,17 +150,32 @@ const latestArticles = computed(() => {
   return articles.value;
 });
 
-const popularArticles = ref([]);
+const popularArticles = ref([]); // 預設空陣列
+const recommendedArticles = ref([]);
+const latestArticlesForHero = ref([]);
+const popularArticlesForHero = ref([]);
 
 const loadPopularArticles = async () => {
   try {
-    const response = await axios.get('/api/articles?page=1&per_page=15&sort_by=popularity');
+    const response = await axios.get(`${API_BASE}/api/articles?page=1&per_page=15&sort_by=popularity`);
+    console.log('API response:', response.data);
     const validArticles = (response.data.data || []).filter(isValidArticle);
     popularArticles.value = validArticles.slice(0, 10);
+    console.log('popularArticles after load:', popularArticles.value);
   } catch (error) {
     console.error("無法載入熱門文章:", error);
   }
 };
+
+const heroArticles = computed(() => {
+  const result = [];
+  for (let i = 0; i < 3; i++) {
+    if (recommendedArticles.value[i]) result.push(recommendedArticles.value[i]);
+    if (latestArticlesForHero.value[i]) result.push(latestArticlesForHero.value[i]);
+    if (popularArticlesForHero.value[i]) result.push(popularArticlesForHero.value[i]);
+  }
+  return result;
+});
 
 const stats = computed(() => {
   return { 
@@ -160,6 +188,8 @@ const stats = computed(() => {
 
 <template>
   <main class="bg-white">
+    <!-- 跑馬燈放在 header 下方 -->
+    <MarqueeNews :articles="popularArticles" />
     <div class="bg-gradient-to-r from-blue-600 to-blue-800 text-white py-2 sm:py-3 md:py-4">
       <div class="max-w-7xl mx-auto px-3 sm:px-4 lg:px-8">
         <div class="grid grid-cols-3 gap-1 sm:gap-2 md:gap-4 lg:gap-8 text-center">
@@ -179,7 +209,7 @@ const stats = computed(() => {
       </div>
     </div>
 
-    <FeaturedArticleHero v-if="carouselArticles.length > 0" :articles="carouselArticles" />
+    <FeaturedArticleHero v-if="heroArticles.length > 0" :articles="heroArticles" />
     
     <div class="max-w-7xl mx-auto py-3 sm:py-4 md:py-6 lg:py-8 px-3 sm:px-4 lg:px-8">
       <div class="grid grid-cols-1 lg:grid-cols-10 lg:gap-6 xl:gap-8">
@@ -236,6 +266,8 @@ const stats = computed(() => {
             <PopularNewsList :articles="popularArticles" />
           </SidebarWidget>
           
+          <RecommendedArticles class="mt-3 sm:mt-4 md:mt-6" />
+
           <div class="mt-3 sm:mt-4 md:mt-6 bg-gray-50 rounded-lg p-3 sm:p-4">
             <h3 class="text-sm sm:text-base md:text-lg font-semibold text-gray-800 mb-2 sm:mb-3">平台資訊</h3>
             <div class="space-y-1 sm:space-y-2 text-xs sm:text-sm text-gray-600">

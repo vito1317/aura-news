@@ -14,6 +14,7 @@ const currentPage = ref(1);
 const hasMore = ref(true);
 const isLoadingMore = ref(false);
 const perPage = 12;
+const API_BASE = import.meta.env.VITE_API_BASE || 'https://api-news.vito1317.com';
 
 const fetchCategoryArticles = async (slug, page = 1, append = false) => {
   if (page === 1) {
@@ -23,7 +24,7 @@ const fetchCategoryArticles = async (slug, page = 1, append = false) => {
   }
   
   try {
-    const response = await axios.get(`/api/categories/${slug}/articles?page=${page}&per_page=${perPage}`);
+    const response = await axios.get(`${API_BASE}/api/categories/${slug}/articles?page=${page}&per_page=${perPage}`);
     category.value = response.data.category;
     
     if (append) {

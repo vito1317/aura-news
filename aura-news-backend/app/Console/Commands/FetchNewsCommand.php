@@ -227,6 +227,31 @@ class FetchNewsCommand extends Command
 
             $this->line("正在建立: " . $fetchedArticle['title']);
             
+            // 在建立 Article 時，呼叫 AI 產生關鍵字
+            $keywords = null;
+            try {
+                $gemini = resolve(\Gemini\Client::class);
+                $prompt = "請根據以下新聞內容，產生3~5個適合用於分類與推薦的繁體中文關鍵字或短語，僅回傳關鍵字本身，用逗號分隔：\n\n" . strip_tags($content);
+                $result = $gemini->generativeModel('gemini-2.5-flash-lite-preview-06-17')->generateContent($prompt);
+                $keywords = trim(str_replace(["\n", "。", "，"], [',', '', ','], $result->text()));
+            } catch (\Exception $e) {
+                $keywords = null;
+            }
+
+            // 在建立 Article 前，檢查標題與內文相關性
+            $isRelated = true;
+            try {
+                $gemini = resolve(\Gemini\Client::class);
+                $prompt = "請判斷以下新聞標題與內文是否相關，僅回傳「相關」或「不相關」：\n\n標題：{$fetchedArticle['title']}\n\n內文：" . strip_tags($content);
+                $result = $gemini->generativeModel('gemini-2.5-flash-lite-preview-06-17')->generateContent($prompt);
+                $answer = trim($result->text());
+                if (strpos($answer, '不相關') !== false) $isRelated = false;
+            } catch (\Exception $e) { $isRelated = true; }
+            if (!$isRelated) {
+                $this->warn('標題與內文不相關，略過: ' . $fetchedArticle['title']);
+                continue;
+            }
+
             $article = Article::create([
                 'source_url' => $fetchedArticle['url'],
                 'title' => $fetchedArticle['title'],
@@ -237,6 +262,7 @@ class FetchNewsCommand extends Command
                 'author' => $fetchedArticle['source']['name'] ?? '未知來源',
                 'status' => 1,
                 'published_at' => Carbon::parse($fetchedArticle['publishedAt'])->addHours(8)->setTimezone('Asia/Taipei'),
+                'keywords' => $keywords,
             ]);
             dispatch(new \App\Jobs\ProcessArticleData($article));
             

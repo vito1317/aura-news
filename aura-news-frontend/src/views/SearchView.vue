@@ -10,12 +10,22 @@ const query = ref(route.query.q || '');
 const articles = ref([]);
 const isLoading = ref(true);
 
+const API_BASE = import.meta.env.VITE_API_BASE || 'https://api-news.vito1317.com';
+
 const searchArticles = async (searchQuery) => {
   if (!searchQuery) return;
   isLoading.value = true;
   try {
-    const response = await axios.get('/api/search', { params: { q: searchQuery } });
-    articles.value = response.data.articles.data;
+    const response = await axios.get(`${API_BASE}/api/search`, { params: { q: searchQuery } });
+    // 讓搜尋同時支援 title、summary、keywords
+    articles.value = (response.data.articles.data || []).filter(article => {
+      const q = searchQuery.toLowerCase();
+      return (
+        (article.title && article.title.toLowerCase().includes(q)) ||
+        (article.summary && article.summary.toLowerCase().includes(q)) ||
+        (article.keywords && article.keywords.toLowerCase().includes(q))
+      );
+    });
   } catch (error) {
     console.error("搜尋失敗:", error);
   } finally {

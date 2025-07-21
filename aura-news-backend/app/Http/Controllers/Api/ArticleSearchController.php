@@ -29,9 +29,10 @@ class ArticleSearchController extends Controller
 
         $articles = Article::whereNotNull('image_url')
                            ->whereNotNull('summary')
-                           ->where(function ($q) use ($query) {
-                               $q->where('title', 'like', "%{$query}%")
-                                 ->orWhere('content', 'like', "%{$query}%");
+                           ->where(function ($qB) use ($query) {
+                               $qB->where('title', 'like', "%{$query}%")
+                                  ->orWhere('content', 'like', "%{$query}%")
+                                  ->orWhere('keywords', 'like', "%{$query}%");
                            })
                            ->latest()
                            ->paginate(12);

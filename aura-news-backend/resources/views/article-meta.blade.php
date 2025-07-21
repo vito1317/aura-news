@@ -13,8 +13,8 @@
     <meta name="twitter:title" content="{{ $article->title }}" />
     <meta name="twitter:description" content="{{ $article->summary ?? $article->title }}" />
     <meta name="twitter:image" content="{{ $article->image_url ?? url('/favicon.ico') }}" />
+    <meta name="keywords" content="{{ $article->keywords }}" />
     <script>
-      // 若是一般使用者，1 秒後自動跳轉到 SPA
       if (!/bot|crawler|spider|facebookexternalhit|slackbot|twitterbot|bingbot|googlebot|line/i.test(navigator.userAgent)) {
         setTimeout(function() {
           window.location.href = 'https://news.vito1317.com/articles/{{ $article->id }}';

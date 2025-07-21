@@ -13,8 +13,10 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->prepend(\Illuminate\Http\Middleware\HandleCors::class);
+        $middleware->prepend(\App\Http\Middleware\TrustProxies::class); // 註冊 TrustProxies
         $middleware->alias([
             'admin' => \App\Http\Middleware\EnsureUserIsAdmin::class,
+            'auth' => \App\Http\Middleware\Authenticate::class, // 註冊 auth middleware
         ]);
         // --- ↓↓↓ 在這裡加入 CSRF 豁免設定 ↓↓↓ ---
         $middleware->validateCsrfTokens(except: [

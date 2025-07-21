@@ -294,6 +294,20 @@ class ProcessArticleData implements ShouldQueue
                 return;
             }
 
+            // 檢查標題與內文相關性
+            $isRelated = true;
+            try {
+                $gemini = resolve(GeminiClient::class);
+                $prompt = "請判斷以下新聞標題與內文是否相關，僅回傳「相關」或「不相關」：\n\n標題：{$this->article->title}\n\n內文：" . strip_tags($this->article->content);
+                $result = $gemini->generativeModel('gemini-2.5-flash-lite-preview-06-17')->generateContent($prompt);
+                $answer = trim($result->text());
+                if (strpos($answer, '不相關') !== false) $isRelated = false;
+            } catch (\Exception $e) { $isRelated = true; }
+            if (!$isRelated) {
+                \Log::warning('標題與內文不相關，略過: ' . $this->article->title);
+                return;
+            }
+
             $gemini = resolve(GeminiClient::class);
             $now = now()->setTimezone('Asia/Taipei')->format('Y-m-d H:i');
             $prompt = "現在時間為 {$now}（UTC+8）。請根據以下新聞全文，撰寫一篇約 500 字的完整新聞內容，並以 Markdown 格式輸出，請使用繁體中文。請將主體內容包在 <!--start--> 和 <!--end--> 標記之間：\n\n" . $plainText;
@@ -303,6 +317,17 @@ class ProcessArticleData implements ShouldQueue
                 $markdownContent = trim($matches[1]);
             }
             $this->article->content = $markdownContent;
+
+            // 產生關鍵字
+            try {
+                $gemini = resolve(GeminiClient::class);
+                $prompt = "請根據以下新聞內容，產生3~5個適合用於分類與推薦的繁體中文關鍵字或短語，僅回傳關鍵字本身，用逗號分隔：\n\n" . strip_tags($this->article->content);
+                $result = $gemini->generativeModel('gemini-2.5-flash-lite-preview-06-17')->generateContent($prompt);
+                $keywords = trim(str_replace(["\n", "。", "，"], [',', '', ','], $result->text()));
+                $this->article->keywords = $keywords;
+            } catch (\Exception $e) {
+                // do nothing
+            }
 
             $prompt = "請將以下新聞內容，整理成一段約 150 字的精簡摘要，請使用繁體中文：\n\n" . strip_tags($this->article->content);
             $result = $gemini->generativeModel('gemini-2.5-flash-lite-preview-06-17')->generateContent($prompt);

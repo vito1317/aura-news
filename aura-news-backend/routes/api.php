@@ -13,12 +13,23 @@ use Illuminate\Support\Str;
 use App\Http\Controllers\Api\ArticleSearchController;
 use App\Http\Controllers\Api\ArticleCredibilityController;
 use App\Http\Controllers\Api\NewsDataController;
+use App\Http\Controllers\Api\ArticleRecommendController;
 
 Route::post('/login', [AuthController::class, 'login']);
+Route::post('register', [\App\Http\Controllers\Api\AuthController::class, 'register']);
 Route::middleware('auth:sanctum')->group(function () {
-    Route::post('/logout', [AuthController::class, 'logout']);
+    Route::post('/logout', [\App\Http\Controllers\Api\AuthController::class, 'logout']);
     Route::get('/user', [AuthController::class, 'user']);
+    Route::put('/user/profile', [AuthController::class, 'updateProfile']);
+    Route::put('/user/password', [AuthController::class, 'updatePassword']);
+    Route::post('articles/{id}/comments', [\App\Http\Controllers\Api\ArticleController::class, 'addComment']);
+    Route::delete('/comments/{commentId}', [\App\Http\Controllers\Api\ArticleController::class, 'deleteComment']);
+    Route::delete('/comments', [\App\Http\Controllers\Api\ArticleController::class, 'deleteAllComments']);
+    Route::post('/articles/{article}/read', [ArticleRecommendController::class, 'markAsRead']);
 });
+
+// 讓所有人都能取得推薦
+Route::get('/articles/recommend', [ArticleRecommendController::class, 'recommend']);
 
 Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
     return $request->user();
@@ -35,6 +46,10 @@ Route::post('/articles/{articleId}/credibility/analyze', [ArticleCredibilityCont
 Route::get('/articles/credibility/progress/{taskId}', [ArticleCredibilityController::class, 'getAnalysisProgress']);
 
 Route::get('/articles/{article}', [ArticleController::class, 'show']);
+Route::get('articles/{id}/comments', [\App\Http\Controllers\Api\ArticleController::class, 'comments']);
+Route::post('articles/{id}/comments', [\App\Http\Controllers\Api\ArticleController::class, 'addComment']);
+Route::delete('/comments/{commentId}', [\App\Http\Controllers\Api\ArticleController::class, 'deleteComment']);
+Route::delete('/comments', [\App\Http\Controllers\Api\ArticleController::class, 'deleteAllComments']);
 
 Route::get('/test-cors', function () {
     return response('CORS OK')->header('Access-Control-Allow-Origin', '*');
