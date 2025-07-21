@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue';
+import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue';
 import axios from 'axios';
 import { marked } from 'marked';
 import { useHead } from '@vueuse/head';
@@ -40,6 +40,64 @@ const currentTaskId = ref(null);
 const isQueued = ref(false);
 const isVerifiedContentExpanded = ref(false);
 const showShareSuccess = ref(false);
+const progressCanvasRef = ref(null);
+
+// ✅ DEFINE COMPUTED PROPERTIES HERE
+const confidence = computed(() => {
+  if (!result.value?.result) return null;
+  const match = result.value.result.match(/【可信度：(\d+)%?】/);
+  return match ? parseInt(match[1], 10) : null;
+});
+
+const confidenceColor = computed(() => {
+  if (confidence.value === null) return '#d1d5db';
+  if (confidence.value >= 80) return '#22c55e';
+  if (confidence.value >= 60) return '#eab308';
+  if (confidence.value >= 40) return '#f97316';
+  return '#ef4444';
+});
+
+function drawProgressCanvas() {
+  const canvas = progressCanvasRef.value;
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const size = 170;
+  const center = size / 2;
+  const radius = 75;
+  const lineWidth = 14;
+  canvas.width = size;
+  canvas.height = size;
+  ctx.clearRect(0, 0, size, size);
+  // 背景圓
+  ctx.beginPath();
+  ctx.arc(center, center, radius, 0, 2 * Math.PI);
+  ctx.strokeStyle = '#f3f4f6';
+  ctx.lineWidth = lineWidth;
+  ctx.stroke();
+  // 進度條
+  const percent = confidence.value || 0;
+  const startAngle = -Math.PI / 2;
+  const endAngle = startAngle + (2 * Math.PI * percent / 100);
+  ctx.beginPath();
+  ctx.arc(center, center, radius, startAngle, endAngle);
+  ctx.strokeStyle = confidenceColor.value;
+  ctx.lineWidth = lineWidth;
+  ctx.lineCap = 'round';
+  ctx.stroke();
+  // 百分比文字
+  ctx.font = 'bold 44px Arial';
+  ctx.fillStyle = confidenceColor.value;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(percent + '%', center, center);
+}
+
+// ✅ NOW THIS WATCHER CAN SAFELY ACCESS `confidence`
+watch([isSavingImage, confidence], ([saving]) => {
+  if (saving) {
+    nextTick(() => drawProgressCanvas());
+  }
+});
 
 const steps = computed(() => {
   if (/^https?:\/\//.test(input.value.trim())) {
@@ -73,18 +131,6 @@ const currentStep = computed(() => {
   return 0;
 });
 
-const confidence = computed(() => {
-  if (!result.value?.result) return null;
-  const match = result.value.result.match(/【可信度：(\d+)%?】/);
-  return match ? parseInt(match[1], 10) : null;
-});
-const confidenceColor = computed(() => {
-  if (confidence.value === null) return '#d1d5db';
-  if (confidence.value >= 80) return '#22c55e';
-  if (confidence.value >= 60) return '#eab308';
-  if (confidence.value >= 40) return '#f97316';
-  return '#ef4444';
-});
 const resultWithoutConfidence = computed(() => {
   if (!result.value?.result) return '';
   return result.value.result.replace(/【可信度：.+?】\s*/g, '');
@@ -310,17 +356,39 @@ const loadResultFromUrl = async () => {
 // 生成預覽圖片
 const generatePreviewImage = async () => {
   if (!resultSectionRef.value) return;
-  
   isSavingImage.value = true;
-  
+  let svg, svgParent, svgClone, originalSvgNextSibling;
   try {
-    // 暫時禁用動畫，確保圖片生成時內容穩定
     const originalVisibility = isResultSectionVisible.value;
     const originalAnimation = hasAnimationStarted.value;
-    
-    // 強制顯示結果區域，禁用動畫
     isResultSectionVisible.value = true;
     hasAnimationStarted.value = true;
+    await nextTick();
+
+    // 1. 找到原本的 SVG
+    svg = resultSectionRef.value.querySelector('svg');
+    if (svg) {
+      svgParent = svg.parentNode;
+      originalSvgNextSibling = svg.nextSibling;
+      svgClone = svg.cloneNode(true);
+      // 設定進度條為最終靜態狀態
+      const circles = svgClone.querySelectorAll('circle');
+      if (circles.length > 1) {
+        const progressCircle = circles[1];
+        const confidenceValue = typeof confidence === 'function' ? confidence() : confidence.value;
+        const finalOffset = 2 * Math.PI * 75 * (1 - (confidenceValue || 0) / 100);
+        progressCircle.setAttribute('stroke-dashoffset', finalOffset);
+        progressCircle.classList.remove('progress-animation');
+      }
+      // 用靜態 SVG 替換原本 SVG
+      svg.style.display = 'none';
+      if (originalSvgNextSibling) {
+        svgParent.insertBefore(svgClone, originalSvgNextSibling);
+      } else {
+        svgParent.appendChild(svgClone);
+      }
+      await nextTick();
+    }
     
     // 等待 DOM 更新
     await nextTick();
@@ -421,11 +489,11 @@ const generatePreviewImage = async () => {
       useCORS: true,
       allowTaint: true,
       width: resultSectionRef.value.offsetWidth,
-      height: resultSectionRef.value.offsetHeight,
+      height: resultSectionRef.value.offsetHeight + 60,
       scrollX: 0,
       scrollY: 0,
       windowWidth: resultSectionRef.value.offsetWidth,
-      windowHeight: resultSectionRef.value.offsetHeight,
+      windowHeight: resultSectionRef.value.offsetHeight + 60,
       logging: false,
       removeContainer: true,
     });
@@ -449,6 +517,12 @@ const generatePreviewImage = async () => {
     isResultSectionVisible.value = originalVisibility;
     hasAnimationStarted.value = originalAnimation;
     
+    // 恢復原本 SVG
+    if (svg && svgClone) {
+      svg.style.display = '';
+      svgClone.remove();
+    }
+    
   } catch (error) {
     console.error('生成預覽圖片失敗:', error);
     alert('生成預覽圖片失敗，請稍後再試');
@@ -462,6 +536,12 @@ const generatePreviewImage = async () => {
     // 錯誤時也要恢復動畫狀態
     isResultSectionVisible.value = originalVisibility;
     hasAnimationStarted.value = originalAnimation;
+    
+    // 恢復原本 SVG
+    if (svg && svgClone) {
+      svg.style.display = '';
+      svgClone.remove();
+    }
   } finally {
     isSavingImage.value = false;
   }
@@ -595,6 +675,15 @@ const leave = (el) => {
   el.offsetHeight; // 強制重繪
   el.style.height = '0px';
 };
+
+const confidenceLevel = computed(() => {
+  if (confidence.value === null) return '未分析';
+  if (confidence.value >= 80) return '極高可信度';
+  if (confidence.value >= 60) return '高可信度';
+  if (confidence.value >= 40) return '中等可信度';
+  if (confidence.value >= 20) return '低可信度';
+  return '極低可信度';
+});
 </script>
 
 <template>
@@ -734,54 +823,53 @@ const leave = (el) => {
               </button>
             </div>
           </div>
-        <div v-if="confidence !== null" class="mb-4 flex flex-col items-center justify-center" style="height:200px; margin-bottom: 0; margin-top: 2rem;">
+        <div v-if="confidence !== null" class="mb-4 flex flex-col items-center justify-center" style="margin-bottom: 0; margin-top: 2rem;">
           <div 
             class="relative" 
             :class="{ 'confidence-icon': isResultSectionVisible }" 
             style="width: 170px; height: 170px;"
           >
-          <svg :width="170" :height="170" viewBox="0 0 170 170" style="display:block;">
-            <circle cx="85" cy="85" r="80" fill="#f3f4f6" />
-            <circle
-              :stroke="confidenceColor"
-              stroke-width="14"
-              fill="none"
-              cx="85" cy="85" r="75"
-              :stroke-dasharray="2 * Math.PI * 75"
-                :stroke-dashoffset="isResultSectionVisible ? 2 * Math.PI * 75 * (1 - confidence / 100) : 2 * Math.PI * 75"
-                :style="{ '--final-offset': 2 * Math.PI * 75 * (1 - confidence / 100) + 'px' }"
-                :class="{ 'progress-animation': isResultSectionVisible }"
-              stroke-linecap="round"
-              transform="rotate(-90 85 85)"
-            />
-              <text 
-                x="85" y="85" 
-                text-anchor="middle" 
-                font-size="44" 
-                font-weight="bold" 
-                :fill="confidenceColor" 
-                dominant-baseline="middle" 
-                alignment-baseline="middle" 
-                dy=".1em"
-                :class="{ 'score-animation': isResultSectionVisible }"
-                :style="{ opacity: isResultSectionVisible ? 'inherit' : '0', transform: isResultSectionVisible ? 'inherit' : 'scale(0.8)' }"
-              >
-                {{ confidence !== null ? confidence + '%' : '' }}
-              </text>
-          </svg>
+            <canvas v-show="isSavingImage" ref="progressCanvasRef" width="170" height="170" style="position:absolute;top:0;left:0;z-index:2;"></canvas>
+            <svg v-show="!isSavingImage" :width="170" :height="170" viewBox="0 0 170 170" style="display:block;">
+              <circle cx="85" cy="85" r="80" fill="#f3f4f6" />
+              <circle
+                :stroke="confidenceColor"
+                stroke-width="14"
+                fill="none"
+                cx="85" cy="85" r="75"
+                :stroke-dasharray="2 * Math.PI * 75"
+                  :stroke-dashoffset="isResultSectionVisible ? 2 * Math.PI * 75 * (1 - confidence / 100) : 2 * Math.PI * 75"
+                  :style="{ '--final-offset': 2 * Math.PI * 75 * (1 - confidence / 100) + 'px' }"
+                  :class="{ 'progress-animation': isResultSectionVisible }"
+                stroke-linecap="round"
+                :transform="isSavingImage ? 'rotate(0 85 85)' : 'rotate(-90 85 85)'"
+              />
+                <text 
+                  x="85" y="85" 
+                  text-anchor="middle" 
+                  font-size="44" 
+                  font-weight="bold" 
+                  :fill="confidenceColor" 
+                  dominant-baseline="middle" 
+                  alignment-baseline="middle" 
+                  dy=".1em"
+                  :class="{ 'score-animation': isResultSectionVisible }"
+                  :style="{ opacity: isResultSectionVisible ? 'inherit' : '0', transform: isResultSectionVisible ? 'inherit' : 'scale(0.8)' }"
+                >
+                  {{ confidence !== null ? confidence + '%' : '' }}
+                </text>
+            </svg>
           </div>
-          <span 
-            class="text-lg font-bold text-gray-700" 
-            style="margin-top: 40px;"
-            :class="{ 'level-animation': isResultSectionVisible }"
-            :style="{ 
-              marginTop: '40px',
-              opacity: isResultSectionVisible ? 'inherit' : '0', 
-              transform: isResultSectionVisible ? 'inherit' : 'translateY(20px)' 
-            }"
-          >
-            AI 可信度
-          </span>
+          <div class="confidence-level-container">
+            <span class="text-lg font-bold text-gray-700" style="margin-top: 40px;">AI 可信度</span>
+            <span
+              class="block text-base font-semibold mt-2 confidence-level-animated"
+              :style="{ color: confidenceColor, marginTop: '1.2em', marginBottom: '2.2em', opacity: isResultSectionVisible ? 1 : 0 }"
+              :class="{ 'level-animation': isResultSectionVisible && !isSavingImage }"
+            >
+              {{ confidenceLevel }}
+            </span>
+          </div>
         </div>
         <div 
           class="text-gray-800 leading-relaxed text-base prose prose-blue max-w-none" 
@@ -1101,5 +1189,34 @@ div[class*="sources"]:not(.sources-animation) {
 .expand-enter-from,
 .expand-leave-to {
   height: 0;
+}
+
+@keyframes confidenceLevelFadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.8) translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+.confidence-level-animated {
+  opacity: 0;
+  transform: scale(0.8) translateY(20px);
+  animation: confidenceLevelFadeIn 0.7s cubic-bezier(0.4,0,0.2,1) 1.1s forwards;
+}
+.confidence-level-animated.level-animation {
+  opacity: 1;
+  transform: scale(1) translateY(0);
+}
+.confidence-level-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-top: 16px;
+  border-radius: 12px;
+  z-index: 10;
+  position: relative;
 }
 </style> 

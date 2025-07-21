@@ -102,11 +102,36 @@ const fetchStats = async () => {
   }
 };
 
-const carouselArticles = computed(() => 
-  popularArticles.value
-    .filter(article => article.popularity_score && article.popularity_score > 0)
-    .slice(0, 4)
-);
+const carouselArticles = computed(() => {
+  // 取 4 篇，3 篇最新，1 篇熱門，去除重複
+  const latestRaw = latestArticles.value.slice(0, 3);
+  const latest = latestRaw.map(a => {
+    if (a.carouselType === '最新') return a;
+    return { ...a, carouselType: '最新' };
+  });
+  const latestIds = new Set(latest.map(a => a.id));
+  const hotRaw = popularArticles.value.filter(a => !latestIds.has(a.id)).slice(0, 1);
+  const hot = hotRaw.map(a => {
+    if (a.carouselType === '熱門') return a;
+    return { ...a, carouselType: '熱門' };
+  });
+  let result = [...latest, ...hot];
+  if (result.length < 4) {
+    const moreHotRaw = popularArticles.value.filter(a => !result.some(b => b.id === a.id)).slice(0, 4 - result.length);
+    const moreHot = moreHotRaw.map(a => {
+      if (a.carouselType === '熱門') return a;
+      return { ...a, carouselType: '熱門' };
+    });
+    result = [...result, ...moreHot];
+  }
+  return result;
+});
+
+// 新增：排除輪播圖已出現的新聞
+const listArticles = computed(() => {
+  const carouselIds = new Set(carouselArticles.value.map(a => a.id));
+  return articles.value.filter(a => !carouselIds.has(a.id));
+});
 
 const latestArticles = computed(() => {
   return articles.value;
@@ -171,7 +196,7 @@ const stats = computed(() => {
             <p class="text-sm sm:text-base text-gray-500">載入中...</p>
           </div>
           
-          <div v-else-if="latestArticles.length === 0" class="text-center py-6 sm:py-8 md:py-12">
+          <div v-else-if="listArticles.length === 0" class="text-center py-6 sm:py-8 md:py-12">
             <svg class="w-12 h-12 sm:w-16 sm:h-16 text-gray-300 mx-auto mb-3 sm:mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
             </svg>
@@ -179,7 +204,7 @@ const stats = computed(() => {
           </div>
           
           <div v-else class="space-y-3 sm:space-y-4 md:space-y-6">
-            <ArticleListItem v-for="article in latestArticles" :key="article.id" :article="article" />
+            <ArticleListItem v-for="article in listArticles" :key="article.id" :article="article" />
             
             <div v-if="hasMore" class="text-center pt-4 sm:pt-6 md:pt-8">
               <button 

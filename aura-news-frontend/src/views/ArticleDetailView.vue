@@ -92,24 +92,41 @@ const credibilityLevel = computed(() => {
 
 const safeCredibilityAnalysis = computed(() => {
   if (credibilityData.value?.credibility_analysis) {
-    let text = credibilityData.value.credibility_analysis;
-    
-    text = text.replace(
-      /(https?:\/\/[^\s<>"{}|\\^`\[\]]+)/g,
-      (url) => {
-        const cleanUrl = url.replace(/[),。！？；：\]\[\s]+$/g, '');
-        const displayUrl = cleanUrl.length > 60 ? cleanUrl.substring(0, 60) + '...' : cleanUrl;
-        return `<a href="${cleanUrl}" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:text-blue-800 underline break-all hover:whitespace-normal" title="${cleanUrl}">${displayUrl}</a>`;
-      }
-    );
-    
-    // 解析其他 Markdown 內容（除了連結）
-    let html = marked.parse(text);
-    
+    // 只用 marked 處理 markdown，不手動插入 <a>
+    let html = marked.parse(credibilityData.value.credibility_analysis);
     return DOMPurify.sanitize(html);
   }
   return '';
 });
+
+// 新增：去除【查證出處】段落的分析內容
+const safeCredibilityAnalysisWithoutSources = computed(() => {
+  if (credibilityData.value?.credibility_analysis) {
+    // 只取【查證出處】前的內容
+    const parts = credibilityData.value.credibility_analysis.split(/【查證出處】/);
+    let main = parts[0].trim();
+    if (!main) return '';
+    let html = marked.parse(main);
+    return DOMPurify.sanitize(html);
+  }
+  return '';
+});
+
+// 查證出處 computed
+const sources = computed(() => {
+  if (!credibilityData.value?.credibility_analysis) return '';
+  const match = credibilityData.value.credibility_analysis.match(/【查證出處】([\s\S]*)$/);
+  return match ? match[1].trim() : '';
+});
+function linkify(text) {
+  if (!text) return '';
+  text = String(text);
+  return text.replace(/(https?:\/\/[\w\-\.\/\?#=&%+:;@,~]+)/g, (url) => {
+    let cleanUrl = url.replace(/[),。！？；：\]\[\s]+$/g, '');
+    let displayUrl = cleanUrl.length > 40 ? cleanUrl.slice(0, 40) + '...' : cleanUrl;
+    return `<a href="${cleanUrl}" target="_blank" rel="noopener noreferrer">${displayUrl}</a>`;
+  });
+}
 
 watch(article, (val) => {
   if (val) {
@@ -739,12 +756,17 @@ const getPopularityLevel = (score) => {
             </div>
 
             <div 
-              v-if="safeCredibilityAnalysis" 
+              v-if="safeCredibilityAnalysisWithoutSources" 
               class="mt-4 sm:mt-6 p-3 sm:p-4 bg-white rounded-lg border transition-all duration-700"
               :class="{ 'analysis-animation': isCredibilitySectionVisible }"
             >
               <h4 class="font-semibold text-gray-800 mb-2 sm:mb-3 text-sm sm:text-base">詳細分析</h4>
-              <div class="prose prose-xs sm:prose-sm max-w-none text-gray-700 break-words overflow-hidden" v-html="safeCredibilityAnalysis"></div>
+              <div class="prose prose-xs sm:prose-sm max-w-none text-gray-700 break-words overflow-hidden" v-html="safeCredibilityAnalysisWithoutSources"></div>
+            </div>
+            <!-- 查證出處區塊 -->
+            <div v-if="sources" class="mt-6 p-4 rounded-lg bg-blue-50 border-l-4 border-blue-400 text-blue-900 text-sm whitespace-pre-line">
+              <strong class="block mb-1 text-blue-700">查證出處</strong>
+              <span v-html="linkify(sources)"></span>
             </div>
           </div>
 
