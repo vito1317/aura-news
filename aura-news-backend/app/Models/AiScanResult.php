@@ -20,12 +20,14 @@ class AiScanResult extends Model
         'search_keywords',
         'verification_sources',
         'completed_at',
+        'external_summaries',
     ];
-
+    
     protected $casts = [
         'search_keywords' => 'array',
         'verification_sources' => 'array',
         'completed_at' => 'datetime',
+        'external_summaries' => 'array',
     ];
 
     public function extractCredibilityScore(): ?int

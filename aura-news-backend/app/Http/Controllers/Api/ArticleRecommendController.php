@@ -6,23 +6,34 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\UserReadHistory;
 use App\Models\Article;
+use Illuminate\Support\Facades\Auth;
 
 class ArticleRecommendController extends Controller
 {
     // 上報閱讀紀錄
     public function markAsRead(Request $request, $articleId)
     {
-        $user = $request->user();
-        $ip = $request->ip();
+        $clientIp = $request->header('X-Forwarded-For');
+        $sessionId = $request->session()->getId();
+        \Log::info('markAsRead debug', [
+            'ip' => $clientIp,
+            'session_id' => $sessionId,
+            'x-forwarded-for' => $request->header('x-forwarded-for'),
+            'user' => $request->user(),
+            'all_headers' => $request->headers->all(),
+        ]);
+        // Use sanctum guard to get user if Bearer token is present
+        $user = Auth::guard('sanctum')->user() ?? $request->user();
+        $ip = $clientIp;
         if ($user) {
             UserReadHistory::updateOrCreate(
                 ['user_id' => $user->id, 'article_id' => $articleId],
-                ['read_at' => now(), 'ip' => $ip]
+                ['read_at' => now(), 'ip' => $ip, 'session_id' => $sessionId]
             );
         } else {
             UserReadHistory::updateOrCreate(
-                ['user_id' => 0, 'article_id' => $articleId, 'ip' => $ip],
-                ['read_at' => now()]
+                ['session_id' => $sessionId, 'article_id' => $articleId],
+                ['read_at' => now(), 'ip' => $ip]
             );
         }
         return response()->json(['success' => true]);
@@ -32,11 +43,19 @@ class ArticleRecommendController extends Controller
     public function recommend(Request $request)
     {
         $user = $request->user();
-        $ip = $request->ip();
+        $ip = $request->header('X-Forwarded-For');
+        $sessionId = $request->session()->getId();
         if ($user) {
             $readQuery = UserReadHistory::where('user_id', $user->id);
         } else {
-            $readQuery = UserReadHistory::where('user_id', 0)->where('ip', $ip);
+            // 優先用 session_id，再用 ip
+            $readQuery = UserReadHistory::whereNull('user_id')
+                ->where(function($q) use ($sessionId, $ip) {
+                    $q->where('session_id', $sessionId);
+                    if ($ip) {
+                        $q->orWhere('ip', $ip);
+                    }
+                });
         }
         $readArticleIds = $readQuery->pluck('article_id');
 

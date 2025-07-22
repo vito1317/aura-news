@@ -21,7 +21,7 @@ class AIScanFakeNewsController extends Controller
         } catch (\Exception $e) {
             $clientIp = $request->header('X-Forwarded-For') 
                 ? explode(',', $request->header('X-Forwarded-For'))[0] 
-                : $request->ip();
+                : $request->header('X-Forwarded-For');
             \Log::warning('AIScanFakeNewsController validate failed', [
                 'ip' => $clientIp,
                 'reason' => $e->getMessage(),
@@ -32,7 +32,7 @@ class AIScanFakeNewsController extends Controller
         $taskId = (string) Str::uuid();
         $clientIp = $request->header('X-Forwarded-For') 
             ? explode(',', $request->header('X-Forwarded-For'))[0] 
-            : $request->ip();
+            : $request->header('X-Forwarded-For');
         
         \Log::info('AIScanFakeNewsController 收到請求', [
             'taskId' => $taskId,
@@ -81,18 +81,28 @@ class AIScanFakeNewsController extends Controller
             ]);
         }
 
+        // 新增：若已偵測到 is_scam，回傳 scam 標記
+        $scam = false;
+        if (isset($data['detectionData']['is_scam']) && $data['detectionData']['is_scam'] === true) {
+            $scam = true;
+        }
+        $resp = $data;
+        if ($scam) {
+            $resp['is_scam'] = true;
+        }
+        // 保證 detectionData 欄位永遠存在
+        if (!array_key_exists('detectionData', $resp)) {
+            $resp['detectionData'] = null;
+        }
         // 檢查是否排隊中（停留在「已接收請求」狀態超過 30 秒）
         if (isset($data['progress']) && $data['progress'] === '已接收請求') {
             $createdAt = \Cache::get("ai_scan_created_{$taskId}");
             if ($createdAt && (time() - $createdAt) > 30) {
-                return response()->json([
-                    'progress' => '排隊中，請稍後',
-                    'isQueued' => true,
-                ]);
+                $resp['progress'] = '排隊中，請稍後';
+                $resp['isQueued'] = true;
             }
         }
-
-        return response()->json($data);
+        return response()->json($resp);
     }
 
     /**

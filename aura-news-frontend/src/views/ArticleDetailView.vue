@@ -24,7 +24,6 @@ renderer.link = function(href, title, text) {
 };
 marked.setOptions({ renderer });
 
-// 修正 [url](url) 只顯示一次連結
 function fixMarkdownLinks(md) {
   return md.replace(/\[([hH][tT][tT][pP][sS]?:\/\/[^\]\s]+)\]\(\1\)/g, function(match, url) {
     return `<a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>`;
@@ -94,17 +93,14 @@ const credibilityLevel = computed(() => {
 
 const safeCredibilityAnalysis = computed(() => {
   if (credibilityData.value?.credibility_analysis) {
-    // 只用 marked 處理 markdown，不手動插入 <a>
     let html = marked.parse(credibilityData.value.credibility_analysis);
     return DOMPurify.sanitize(html);
   }
   return '';
 });
 
-// 新增：去除【查證出處】段落的分析內容
 const safeCredibilityAnalysisWithoutSources = computed(() => {
   if (credibilityData.value?.credibility_analysis) {
-    // 只取【查證出處】前的內容
     const parts = credibilityData.value.credibility_analysis.split(/【查證出處】/);
     let main = parts[0].trim();
     if (!main) return '';
@@ -114,7 +110,6 @@ const safeCredibilityAnalysisWithoutSources = computed(() => {
   return '';
 });
 
-// 查證出處 computed
 const sources = computed(() => {
   if (!credibilityData.value?.credibility_analysis) return '';
   const match = credibilityData.value.credibility_analysis.match(/【查證出處】([\s\S]*)$/);
@@ -142,7 +137,6 @@ watch(article, (val) => {
         { property: 'og:image', content: val.image_url || '/favicon.ico' },
         { property: 'og:url', content: typeof window !== 'undefined' ? window.location.href : '' },
         { name: 'twitter:card', content: 'summary_large_image' },
-        // 新增 keywords meta tag
         val.keywords ? { name: 'keywords', content: val.keywords } : null
       ].filter(Boolean),
       script: [
@@ -274,7 +268,6 @@ const pollAnalysisProgress = (taskId) => {
   }, 2000);
 };
 
-// 留言板狀態
 const comments = ref([]);
 const commentForm = reactive({ user_name: '', content: '' });
 const commentLoading = ref(false);
@@ -350,11 +343,10 @@ onMounted(async () => {
     const response = await axios.get(`${import.meta.env.VITE_API_BASE}/api/articles/${articleId}`);
     article.value = response.data;
 
-    // 新增：上報閱讀紀錄
     if (article.value?.id) {
       await markArticleAsRead(article.value.id);
     }
-
+    
     await fetchCredibility();
     
     await nextTick();
@@ -576,17 +568,16 @@ function searchByKeyword(kw) {
           {{ article.title }}
         </h1>
         <div v-if="article.keywords" class="mb-4 flex flex-wrap gap-2">
-          <span
+          <RouterLink
             v-for="kw in article.keywords.split(',')"
             :key="kw"
+            :to="{ name: 'search', query: { q: kw.trim() } }"
             class="inline-block bg-blue-100 text-blue-700 px-2 py-1 rounded text-xs font-medium cursor-pointer hover:bg-blue-200 hover:text-blue-900 transition"
-            @click="searchByKeyword(kw)"
           >
             #{{ kw.trim() }}
-          </span>
+          </RouterLink>
         </div>
         <div class="text-xs sm:text-sm text-gray-500 mb-6 sm:mb-8">
-          <!-- 桌面版：水平排列 -->
           <div class="hidden sm:flex sm:items-center sm:gap-4">
             <span>作者: {{ article.author || '匿名' }}</span>
             <span>|</span>
@@ -608,7 +599,6 @@ function searchByKeyword(kw) {
             </span>
           </div>
           
-          <!-- 手機版：垂直排列，無間距 -->
           <div class="sm:hidden space-y-1">
             <div class="break-words">
               <span>作者: {{ article.author || '匿名' }}</span>

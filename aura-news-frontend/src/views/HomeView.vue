@@ -31,7 +31,7 @@ const isLoading = ref(true);
 const currentPage = ref(1);
 const hasMore = ref(true);
 const isLoadingMore = ref(false);
-const perPage = 36;
+const perPage = ref(36);
 const API_BASE = import.meta.env.VITE_API_BASE || 'https://api-news.vito1317.com';
 
 function isValidArticle(article) {
@@ -46,20 +46,31 @@ function isValidArticle(article) {
   );
 }
 
+function updatePerPage() {
+  if (window.innerWidth < 640) {
+    perPage.value = 12;
+  } else {
+    perPage.value = 36;
+  }
+}
 
-
-onMounted(async () => {
+onMounted(() => {
+  updatePerPage();
+  window.addEventListener('resize', updatePerPage);
+  // 用 setTimeout 確保 perPage 設定後再載入
+  setTimeout(async () => {
   await loadPopularArticles();
   await loadArticles();
-  // 先取推薦
-  const rec = (await fetchRecommendedArticles()).slice(0, 3).map(a => ({ ...a, carouselType: '推薦' }));
-  // 最新排除已在推薦的
-  const latest = articles.value.filter(a => !rec.some(r => r.id === a.id)).slice(0, 3).map(a => ({ ...a, carouselType: '最新' }));
-  // 熱門排除已在推薦/最新的
-  const hot = popularArticles.value.filter(a => !rec.some(r => r.id === a.id) && !latest.some(l => l.id === a.id)).slice(0, 3).map(a => ({ ...a, carouselType: '熱門' }));
-  recommendedArticles.value = rec;
-  latestArticlesForHero.value = latest;
-  popularArticlesForHero.value = hot;
+    // 先取推薦
+    const rec = (await fetchRecommendedArticles()).slice(0, 3).map(a => ({ ...a, carouselType: '推薦' }));
+    // 最新排除已在推薦的
+    const latest = articles.value.filter(a => !rec.some(r => r.id === a.id)).slice(0, 3).map(a => ({ ...a, carouselType: '最新' }));
+    // 熱門排除已在推薦/最新的
+    const hot = popularArticles.value.filter(a => !rec.some(r => r.id === a.id) && !latest.some(l => l.id === a.id)).slice(0, 3).map(a => ({ ...a, carouselType: '熱門' }));
+    recommendedArticles.value = rec;
+    latestArticlesForHero.value = latest;
+    popularArticlesForHero.value = hot;
+  }, 0);
 });
 
 const loadArticles = async (page = 1, append = false) => {
@@ -70,7 +81,7 @@ const loadArticles = async (page = 1, append = false) => {
   }
   
   try {
-    const response = await axios.get(`${API_BASE}/api/articles?page=${page}&per_page=${perPage}&sort_by=latest`);
+    const response = await axios.get(`${API_BASE}/api/articles?page=${page}&per_page=${perPage.value}&sort_by=latest`);
     const validArticles = (response.data.data || []).filter(isValidArticle);
     
     totalArticles.value = response.data.total || 0;
@@ -209,7 +220,7 @@ const stats = computed(() => {
       </div>
     </div>
 
-    <FeaturedArticleHero v-if="heroArticles.length > 0" :articles="heroArticles" />
+    <FeaturedArticleHero v-if="heroArticles.length > 0" :articles="heroArticles" class="overflow-hidden" />
     
     <div class="max-w-7xl mx-auto py-3 sm:py-4 md:py-6 lg:py-8 px-3 sm:px-4 lg:px-8">
       <div class="grid grid-cols-1 lg:grid-cols-10 lg:gap-6 xl:gap-8">
@@ -267,7 +278,7 @@ const stats = computed(() => {
           </SidebarWidget>
           
           <RecommendedArticles class="mt-3 sm:mt-4 md:mt-6" />
-
+          
           <div class="mt-3 sm:mt-4 md:mt-6 bg-gray-50 rounded-lg p-3 sm:p-4">
             <h3 class="text-sm sm:text-base md:text-lg font-semibold text-gray-800 mb-2 sm:mb-3">平台資訊</h3>
             <div class="space-y-1 sm:space-y-2 text-xs sm:text-sm text-gray-600">

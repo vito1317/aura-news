@@ -35,15 +35,16 @@ function searchByKeyword(kw) {
     :autoplay="{ delay: 5000, disableOnInteraction: false }"
     navigation
     pagination
-    class="bg-gray-800 text-white h-[400px] sm:h-[450px] md:h-[550px]"
+    class="bg-gray-800 text-white h-[420px] sm:h-[450px] md:h-[550px] overflow-hidden relative"
     @slideChange="(swiper) => { if (currentSlide && typeof currentSlide === 'object' && 'value' in currentSlide) { currentSlide.value = swiper.realIndex; } }"
   >
     <SwiperSlide v-for="(article, idx) in articles" :key="article.id">
       <div class="relative w-full h-full">
-        <img :src="article.image_url" :alt="article.title" class="absolute inset-0 w-full h-full object-cover opacity-50">
-        <div class="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
+        <img :src="article.image_url" :alt="article.title" class="absolute inset-0 w-full h-full object-cover opacity-50 z-0" style="top:0;left:0;height:100%;width:100%;object-fit:cover;object-position:center;">
+        <!-- 手機版遮罩，讓圖片填滿上方且內容不被遮住 -->
+        <div class="sm:hidden absolute top-0 left-0 w-full h-full bg-gradient-to-b from-black/80 to-transparent pointer-events-none z-10" style="height:100%;"></div>
         <div class="relative max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 h-full flex flex-col justify-end items-start text-left pb-8 sm:pb-16 md:pb-24 hero-content">
-          <div class="w-full lg:w-2/3">
+          <div class="w-full lg:w-2/3 z-10" style="word-break:break-word;">
             <!-- 最新/熱門/推薦標籤與熱門度分數 -->
             <div v-if="article.carouselType || article.popularity_score" class="inline-block mb-2 sm:mb-3 mr-2 align-middle">
               <span v-if="article.carouselType === '推薦'" class="px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-500 text-white shadow">推薦</span>
@@ -118,11 +119,11 @@ function searchByKeyword(kw) {
 .rwd-keyword-tag {
   font-size: 0.85rem;
   margin-bottom: 0.25rem;
-}
+  }
 @media (max-width: 640px) {
   .rwd-keywords-label {
     font-size: 0.7rem;
-  }
+}
   .rwd-keyword-tag {
     font-size: 0.7rem;
     padding: 0.15rem 0.5rem;

@@ -25,7 +25,7 @@ class AIScanFakeNewsJob implements ShouldQueue
     protected $taskId;
     protected $content;
     protected $clientIp;
-    protected $articleId; // 新增：文章 ID
+    protected $articleId;
 
     public function __construct($taskId, $content, $clientIp, $articleId = null)
     {
@@ -33,6 +33,11 @@ class AIScanFakeNewsJob implements ShouldQueue
         $this->content = $content;
         $this->clientIp = $clientIp;
         $this->articleId = $articleId;
+    }
+
+    private function getOldDetectionData() {
+        $old = \Cache::get("ai_scan_progress_{$this->taskId}");
+        return $old['detectionData'] ?? null;
     }
 
     public function handle()
@@ -47,6 +52,7 @@ class AIScanFakeNewsJob implements ShouldQueue
                 Cache::put("ai_scan_progress_{$this->taskId}", [
                     'progress' => '請求過於頻繁，請稍後再試',
                     'result' => null,
+                    'detectionData' => $this->getOldDetectionData(),
                 ], 600);
                 return;
             }
@@ -56,6 +62,7 @@ class AIScanFakeNewsJob implements ShouldQueue
         Cache::put("ai_scan_progress_{$this->taskId}", [
             'progress' => '正在抓取主文/內容',
             'result' => null,
+            'detectionData' => $this->getOldDetectionData(),
         ], 600);
         sleep(1);
         $plainText = null;
@@ -251,7 +258,7 @@ class AIScanFakeNewsJob implements ShouldQueue
                         ]);
                     }
                 }
-                // 特殊處理：LINE TODAY 新聞
+
                 elseif (strpos($url, 'today.line.me/tw/v2/article') !== false) {
                     $mainNode = $xpath->query('//article[contains(@class, "news-content")]')->item(0);
                     $lineText = [];
@@ -299,43 +306,23 @@ class AIScanFakeNewsJob implements ShouldQueue
             Cache::put("ai_scan_progress_{$this->taskId}", [
                 'progress' => '主文擷取失敗，請嘗試複製主文內容貼上',
                 'result' => null,
+                'detectionData' => $this->getOldDetectionData(),
             ], 600);
             return;
         }
 
         // AI 偵測是否為新聞或文章
+        // 只寫 progress，不寫 detectionData，等 AI 回應後再寫入
         Cache::put("ai_scan_progress_{$this->taskId}", [
             'progress' => 'AI 偵測內容類型',
             'result' => null,
+            'detectionData' => $this->getOldDetectionData(),
         ], 600);
         
         // 初始化 Gemini 客戶端
         $gemini = resolve(GeminiClient::class);
         
-        $newsDetectionPrompt = "你是一個內容判斷專家。請分析以下內容是否為新聞報導、文章或值得查證的內容。
-
-判斷標準：
-- 新聞：包含時事、事件報導、事實陳述、客觀資訊
-- 文章：評論、分析、觀點、政策討論、社會議題等
-- 值得查證：包含事實陳述、數據、觀點、爭議性內容等
-- 非查證內容：純廣告、小說、詩歌、食譜、技術教學等
-
-請嚴格按照以下 JSON 格式回覆，不要添加任何其他文字：
-
-{
-  \"is_news\": true,
-  \"reason\": \"這是新聞報導或值得查證的內容，因為...\"
-}
-
-或
-
-{
-  \"is_news\": false,
-  \"reason\": \"這不是新聞或文章，因為...\"
-}
-
-待判斷內容：
-" . $plainText;
+        $newsDetectionPrompt = "你是一個內容判斷專家。請分析以下內容是否為新聞報導、文章、值得查證的內容，或是否有詐騙、詐騙徵兆。\n\n判斷標準：\n- 新聞：包含時事、事件報導、事實陳述、客觀資訊\n- 文章：評論、分析、觀點、政策討論、社會議題等\n- 值得查證：包含事實陳述、數據、觀點、爭議性內容等\n- 詐騙：內容涉及金錢詐騙、假冒官方、釣魚連結、投資詐騙、假冒親友、假中獎、假冒客服、要求個資、可疑連結、誇大不實、恐嚇威脅等\n- 非查證內容：純廣告、小說、詩歌、食譜、技術教學等\n\n請嚴格按照以下 JSON 格式回覆，不要添加任何其他文字：\n\n{\n  \"is_news\": true,\n  \"is_scam\": false,\n  \"reason\": \"這是新聞報導或值得查證的內容，因為...\"\n}\n\n或\n\n{\n  \"is_news\": false,\n  \"is_scam\": true,\n  \"reason\": \"這是詐騙內容，因為...\"\n}\n\n或\n\n{\n  \"is_news\": false,\n  \"is_scam\": false,\n  \"reason\": \"這不是新聞或詐騙，因為...\"\n}\n\n待判斷內容：\n" . $plainText;
         \Log::info('AIScanFakeNewsJob newsDetectionPrompt', [
             'ip' => $ip,
             'taskId' => $this->taskId,
@@ -410,22 +397,28 @@ class AIScanFakeNewsJob implements ShouldQueue
                 }
             }
             
-            // 檢查是否為新聞或文章
-            if (!$detectionData['is_news']) {
-                \Log::info('AIScanFakeNewsJob content not news', [
-                    'ip' => $ip,
-                    'taskId' => $this->taskId,
-                    'aiResponse' => $aiResponse,
-                    'detectionData' => $detectionData,
-                ]);
-                
-                Cache::put("ai_scan_progress_{$this->taskId}", [
-                    'progress' => '此內容非新聞，請確認輸入',
-                    'result' => null,
-                    'error' => '此內容非新聞或文章，請確認輸入',
-                ], 600);
-                return;
-            }
+            // 檢查是否為新聞或文章或詐騙
+        if (empty($detectionData['is_news']) && empty($detectionData['is_scam'])) {
+            \Log::info('AIScanFakeNewsJob content not news or scam', [
+                'ip' => $ip,
+                'taskId' => $this->taskId,
+                'aiResponse' => $aiResponse,
+                'detectionData' => $detectionData,
+            ]);
+            Cache::put("ai_scan_progress_{$this->taskId}", [
+                'progress' => '此內容非新聞或詐騙，請確認輸入',
+                'result' => null,
+                'error' => '此內容非新聞、文章或詐騙，請確認輸入',
+                'detectionData' => $detectionData,
+            ], 600);
+            return;
+        }
+        // 新增：AI 偵測內容類型結束時，寫入 detectionData 供 progress API 用
+        Cache::put("ai_scan_progress_{$this->taskId}", [
+            'progress' => 'AI 偵測內容類型',
+            'result' => null,
+            'detectionData' => $detectionData,
+        ], 600);
             
             \Log::info('AIScanFakeNewsJob content is news', [
                 'ip' => $ip,
@@ -439,7 +432,6 @@ class AIScanFakeNewsJob implements ShouldQueue
                 'taskId' => $this->taskId,
                 'error' => $e->getMessage(),
             ]);
-            
             // 檢查是否為配額超限錯誤
             if (strpos($e->getMessage(), 'quota') !== false || 
                 strpos($e->getMessage(), 'exceeded') !== false ||
@@ -448,17 +440,25 @@ class AIScanFakeNewsJob implements ShouldQueue
                     'progress' => 'AI 服務配額不足，請稍後再試',
                     'result' => null,
                     'error' => 'AI 服務配額不足，請稍後再試',
+                    'detectionData' => ['is_news' => false, 'is_scam' => false, 'reason' => 'AI 服務配額不足'],
                 ], 600);
                 return;
             }
-            
-            // 如果 AI 偵測失敗，繼續執行（避免誤判）
+            // 其他 AI 請求失敗也寫入 detectionData，避免 null
+            Cache::put("ai_scan_progress_{$this->taskId}", [
+                'progress' => 'AI 偵測內容類型',
+                'result' => null,
+                'error' => 'AI 請求失敗，請稍後再試',
+                'detectionData' => ['is_news' => false, 'is_scam' => false, 'reason' => 'AI 請求失敗'],
+            ], 600);
+            return;
         }
 
         // 2. AI 產生查證關鍵字並搜尋站內新聞
         Cache::put("ai_scan_progress_{$this->taskId}", [
             'progress' => 'AI 產生搜尋關鍵字',
             'result' => null,
+            'detectionData' => $this->getOldDetectionData(),
         ], 600);
         $now = now()->setTimezone('Asia/Taipei')->format('Y-m-d H:i');
         $plainTextMarked = "【主文開始】\n" . $plainText . "\n【主文結束】";
@@ -524,11 +524,13 @@ class AIScanFakeNewsJob implements ShouldQueue
         Cache::put("ai_scan_progress_{$this->taskId}", [
             'progress' => '正在搜尋新聞資料',
             'result' => null,
+            'detectionData' => $this->getOldDetectionData(),
         ], 600);
         sleep(1);
         // 1. 站內新聞搜尋
         $articles = Article::search($searchKeyword)->take(3)->get();
         $searchText = '';
+        $externalUrls = [];
         foreach ($articles as $idx => $article) {
             // 如果是文章可信度分析，排除自己
             if ($this->articleId && $article->id == $this->articleId) {
@@ -537,6 +539,9 @@ class AIScanFakeNewsJob implements ShouldQueue
             $searchText .= ($idx+1) . ". [站內] 標題：" . $article->title . "\n";
             $searchText .= "摘要：" . ($article->summary ?: mb_substr(strip_tags($article->content),0,100)) . "\n";
             $searchText .= "來源：" . ($article->source_url ?? '') . "\n---\n";
+            if (!empty($article->source_url)) {
+                $externalUrls[] = $article->source_url;
+            }
         }
         // 2. NewsAPI 全網新聞搜尋
         $newsApiKey = env('NEWS_API_KEY');
@@ -560,6 +565,9 @@ class AIScanFakeNewsJob implements ShouldQueue
                         $searchText .= ($idx+1) . ". [NewsAPI] 標題：" . $article['title'] . "\n";
                         $searchText .= "摘要：" . ($article['description'] ?? '') . "\n";
                         $searchText .= "來源：" . ($article['url'] ?? '') . "\n---\n";
+                        if (!empty($article['url'])) {
+                            $externalUrls[] = $article['url'];
+                        }
                     }
                 }
             } catch (\Exception $e) {
@@ -582,6 +590,9 @@ class AIScanFakeNewsJob implements ShouldQueue
                         $searchText .= ($idx+1) . ". [NewsData] 標題：" . $article['title'] . "\n";
                         $searchText .= "摘要：" . ($article['summary'] ?? '') . "\n";
                         $searchText .= "來源：" . ($article['source_url'] ?? '') . "\n---\n";
+                        if (!empty($article['source_url'])) {
+                            $externalUrls[] = $article['source_url'];
+                        }
                     }
                 }
             } catch (\Exception $e) {
@@ -620,6 +631,9 @@ class AIScanFakeNewsJob implements ShouldQueue
                     $googleSearchText .= ($idx+1) . ". [Google] 標題：" . $item['title'] . "\n";
                     $googleSearchText .= "摘要：" . ($item['snippet'] ?? '') . "\n";
                     $googleSearchText .= "來源：" . $item['link'] ?? '' . " \n---\n";
+                    if (!empty($item['link'])) {
+                        $externalUrls[] = $item['link'];
+                    }
                 }
                 
                 \Log::info('Google Search API 查詢成功', [
@@ -684,6 +698,9 @@ class AIScanFakeNewsJob implements ShouldQueue
                             $googleSearchText .= ($idx+1) . ". [Brave] 標題：" . $item['title'] . "\n";
                             $googleSearchText .= "摘要：" . $item['description'] . "\n";
                             $googleSearchText .= "來源：" . $item['url'] . " \n---\n";
+                            if (!empty($item['url'])) {
+                                $externalUrls[] = $item['url'];
+                            }
                         }
                         
                         \Log::info('Brave Search API 查詢成功', [
@@ -716,39 +733,46 @@ class AIScanFakeNewsJob implements ShouldQueue
             $searchText = '（查無相關新聞）';
         }
 
+        // 新增：AI 摘要每個外部網站內容
+        $externalSummaries = [];
+        $gemini = resolve(GeminiClient::class);
+        foreach ($externalUrls as $url) {
+            try {
+                $summaryPrompt = "請摘要這個網頁的主要內容（繁體中文，200字內）：" . $url;
+                $summaryResult = $gemini->generativeModel('gemini-2.5-flash-lite-preview-06-17')->generateContent($summaryPrompt);
+                $externalSummaries[$url] = trim($summaryResult->text());
+            } catch (\Exception $e) {
+                $externalSummaries[$url] = '（AI 摘要失敗）';
+            }
+        }
+        // 將摘要加入查證資料
+        if (!empty($externalSummaries)) {
+            $searchText .= "\n\n【AI 網頁摘要】\n";
+            foreach ($externalSummaries as $url => $summary) {
+                $searchText .= "來源：$url\n摘要：$summary\n---\n";
+            }
+        }
+
         // 3. AI 綜合查證
         Cache::put("ai_scan_progress_{$this->taskId}", [
             'progress' => 'AI 綜合查證中',
             'result' => null,
+            'detectionData' => $this->getOldDetectionData(),
         ], 600);
         $nowTime = now()->setTimezone('Asia/Taipei')->format('Y-m-d H:i');
-        $prompt = "你是一個新聞可信度分析專家。請根據提供的查證資料，分析用戶輸入的新聞內容的可信度。
+        $plainTextMarked = "【主文開始】\n" . $plainText . "\n【主文結束】";
 
-請嚴格按照以下 JSON 格式回覆，不要添加任何其他文字：
+        // 判斷是否為詐騙內容
+        $isScam = false;
+        if (isset($detectionData['is_scam']) && $detectionData['is_scam'] === true) {
+            $isScam = true;
+        }
 
-{
-  \"analysis\": \"詳細的查證過程和可信度分析理由\",
-  \"credibility_score\": 85,
-  \"recommendation\": \"對讀者的建議和提醒\",
-  \"sources\": [\"查證來源1\", \"查證來源2\", \"查證來源3\"]
-}
-
-要求：
-- credibility_score: 0-100 的整數，代表可信度百分比
-- analysis: 詳細說明查證過程和判斷理由
-- recommendation: 給讀者的具體建議
-- sources: 列出所有查證時參考的來源
-
-查證時間：{$nowTime}
-
-查證資料：
-{$searchText}
-
-待查證新聞：
-{$plainTextMarked}
-
-資料來源：" . (preg_match('/^https?:\/\//i', trim($this->content)) ? $this->content : '用戶貼上主文') . "
-查證關鍵字：{$searchKeyword}";
+        if ($isScam) {
+            $prompt = "你是一位詐騙偵測與防詐專家。請根據查證資料，詳細分析用戶輸入內容的詐騙手法、徵兆、危險性，並給出具體防詐建議。\n\n請嚴格按照以下 JSON 格式回覆，不要添加任何其他文字：\n\n{\n  \"analysis\": \"詳細的詐騙手法與徵兆分析\",\n  \"scam_risk_level\": \"高/中/低\",\n  \"recommendation\": \"防詐建議\",\n  \"sources\": [\"查證來源1\", \"查證來源2\"]\n}\n\n要求：\n- analysis: 詳細說明詐騙手法、徵兆、危險性\n- scam_risk_level: 高/中/低\n- recommendation: 給讀者的防詐建議\n- sources: 列出所有查證時參考的來源\n\n查證時間：{$nowTime}\n\n查證資料：\n{$searchText}\n\n待查證內容：\n{$plainTextMarked}\n\n資料來源：" . (preg_match('/^https?:\/\//i', trim($this->content)) ? $this->content : '用戶貼上主文') . "\n查證關鍵字：{$searchKeyword}";
+        } else {
+            $prompt = "你是一個新聞可信度分析專家。請根據提供的查證資料，分析用戶輸入的新聞內容的可信度。\n\n請嚴格按照以下 JSON 格式回覆，不要添加任何其他文字：\n\n{\n  \"analysis\": \"詳細的查證過程和可信度分析理由\",\n  \"credibility_score\": 85,\n  \"recommendation\": \"對讀者的建議和提醒\",\n  \"sources\": [\"查證來源1\", \"查證來源2\", \"查證來源3\"]\n}\n\n要求：\n- credibility_score: 0-100 的整數，代表可信度百分比\n- analysis: 詳細說明查證過程和判斷理由\n- recommendation: 給讀者的具體建議\n- sources: 列出所有查證時參考的來源\n\n查證時間：{$nowTime}\n\n查證資料：\n{$searchText}\n\n待查證新聞：\n{$plainTextMarked}\n\n資料來源：" . (preg_match('/^https?:\/\//i', trim($this->content)) ? $this->content : '用戶貼上主文') . "\n查證關鍵字：{$searchKeyword}";
+        }
         
         \Log::info('AIScanFakeNewsJob analysis prompt', [
             'ip' => $ip,
@@ -863,12 +887,13 @@ class AIScanFakeNewsJob implements ShouldQueue
             'searchKeyword' => $searchKeyword,
         ]);
         
-        $this->saveScanResult($aiText, $searchKeyword);
+        $this->saveScanResult($aiText, $searchKeyword, $externalSummaries ?? []);
 
         // 完成
         Cache::put("ai_scan_progress_{$this->taskId}", [
             'progress' => '完成',
             'result' => $aiText,
+            'detectionData' => $this->getOldDetectionData(),
         ], 600);
         
         \Log::info('AIScanFakeNewsJob 完成', [
@@ -931,7 +956,7 @@ class AIScanFakeNewsJob implements ShouldQueue
     /**
      * 儲存掃描結果到資料庫
      */
-    private function saveScanResult(string $analysisResult, string $searchKeyword)
+    private function saveScanResult(string $analysisResult, string $searchKeyword, array $externalSummaries = [])
     {
         try {
             $credibilityScore = $this->extractCredibilityScore($analysisResult);
@@ -963,6 +988,7 @@ class AIScanFakeNewsJob implements ShouldQueue
                 'search_keywords' => [$searchKeyword],
                 'verification_sources' => $verificationSources,
                 'completed_at' => now(),
+                'external_summaries' => $externalSummaries,
             ]);
 
             \Log::info('AI 掃描結果已儲存到資料庫', [

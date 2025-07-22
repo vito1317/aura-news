@@ -57,6 +57,18 @@ const confidenceColor = computed(() => {
   return '#ef4444';
 });
 
+const isScam = computed(() => {
+  if (!result.value?.result) return false;
+  // 嘗試解析 scam 標記
+  try {
+    const scamMatch = result.value.result.match(/"is_scam"\s*:\s*(true|false)/);
+    if (scamMatch) return scamMatch[1] === 'true';
+    // 也支援【詐騙】、【scam】等關鍵字
+    if (/詐騙|scam/i.test(result.value.result)) return true;
+  } catch (e) {}
+  return false;
+});
+
 function drawProgressCanvas() {
   const canvas = progressCanvasRef.value;
   if (!canvas) return;
@@ -106,6 +118,7 @@ const steps = computed(() => {
       'AI 偵測內容類型',
       'AI 產生搜尋關鍵字',
       '新聞資料搜尋',
+      'AI 摘要外部網站',
       'AI 綜合查證',
       '完成',
     ];
@@ -115,20 +128,46 @@ const steps = computed(() => {
       'AI 偵測內容類型',
       'AI 產生搜尋關鍵字',
       '新聞資料搜尋',
+      'AI 摘要外部網站',
       'AI 綜合查證',
       '完成',
     ];
   }
 });
 const currentStep = computed(() => {
-  const p = progress.value || '';
+  const p = progress.value?.progress || '';
   if (p === '完成') return steps.value.length - 1;
-  if (p.includes('AI 綜合查證')) return 4;
-  if (p.includes('新聞資料') || p.includes('站內搜尋')) return 3;
-  if (p.includes('AI 產生搜尋關鍵字')) return 2;
-  if (p.includes('AI 偵測內容類型')) return 1;
+  if (p.includes('AI 綜合查證')) return steps.value.length - 2;
+  if (p.includes('AI 網頁摘要')) return steps.value.length - 3;
+  if (p.includes('新聞資料') || p.includes('站內搜尋')) return steps.value.length - 4;
+  if (p.includes('AI 產生搜尋關鍵字')) return steps.value.length - 5;
+  if (p.includes('AI 偵測內容類型')) return steps.value.length - 6;
   if (p.includes('抓取主文') || p.includes('查看新聞') || p.includes('分析網址') || p.includes('分析內容')) return 0;
   return 0;
+});
+
+const scamStepIndex = computed(() => steps.value.findIndex(s => s.includes('AI 偵測內容類型')));
+// 新增：AI 偵測內容類型步驟時，直接從 progress API 的 detectionData 判斷主題
+const isScamActive = computed(() => {
+  const p = progress.value || {};
+  if (
+    p &&
+    typeof p === 'object' &&
+    p.detectionData &&
+    p.detectionData.is_scam === true &&
+    (
+      p.progress?.includes('AI 偵測內容類型') ||
+      p.progress?.includes('AI 產生搜尋關鍵字') ||
+      p.progress?.includes('新聞') ||
+      p.progress?.includes('AI 摘要外部網站') ||
+      p.progress?.includes('AI 綜合查證') ||
+      p.progress === '完成'
+    )
+  ) {
+    return true;
+  }
+  if (result.value && isScam.value) return true;
+  return false;
 });
 
 const resultWithoutConfidence = computed(() => {
@@ -194,7 +233,8 @@ const pollProgress = (taskId) => {
   pollingInterval = setInterval(async () => {
     try {
       const res = await axios.get(`${import.meta.env.VITE_API_BASE}/api/ai/scan-fake-news/progress/${taskId}`);
-      progress.value = res.data.progress;
+      progress.value = res.data;
+      console.log('[pollProgress debug]', res.data);
       
       // 檢查是否排隊中
       if (res.data.isQueued) {
@@ -219,8 +259,12 @@ const pollProgress = (taskId) => {
         return;
       }
       if (res.data.progress === '完成') {
+        let resultText = res.data.result;
+        if (typeof resultText === 'object' && resultText !== null) {
+          resultText = resultText.reason || JSON.stringify(resultText);
+        }
         result.value = {
-          result: res.data.result,
+          result: resultText,
           verified_content: res.data.verified_content,
           original_content: res.data.original_content,
         };
@@ -332,8 +376,12 @@ const loadResultFromUrl = async () => {
       
       if (res.data.success) {
         const data = res.data.data;
+        let resultText = data.analysis_result;
+        if (typeof resultText === 'object' && resultText !== null) {
+          resultText = resultText.reason || JSON.stringify(resultText);
+        }
         result.value = {
-          result: data.analysis_result,
+          result: resultText,
           verified_content: data.verified_content,
           original_content: data.original_content,
         };
@@ -651,11 +699,11 @@ onMounted(() => {
 });
 
 useHead({
-  title: 'AI 假新聞查證｜Aura News - 即時可信度分析',
+  title: 'AI 假新聞/詐騙查證｜Aura News - 即時可信度分析',
   meta: [
-    { name: 'description', content: 'Aura News AI 假新聞查證工具，支援網址或主文內容輸入，AI 即時分析可信度、查證出處，提供最即時的新聞真偽判斷。' },
-    { property: 'og:title', content: 'AI 假新聞查證｜Aura News - 即時可信度分析' },
-    { property: 'og:description', content: 'Aura News AI 假新聞查證工具，支援網址或主文內容輸入，AI 即時分析可信度、查證出處，提供最即時的新聞真偽判斷。' },
+    { name: 'description', content: 'Aura News AI 假新聞/詐騙查證工具，支援網址或主文內容輸入，AI 即時分析可信度、查證出處，提供最即時的新聞與詐騙真偽判斷。' },
+    { property: 'og:title', content: 'AI 假新聞/詐騙查證｜Aura News - 即時可信度分析' },
+    { property: 'og:description', content: 'Aura News AI 假新聞/詐騙查證工具，支援網址或主文內容輸入，AI 即時分析可信度、查證出處，提供最即時的新聞與詐騙真偽判斷。' },
     { property: 'og:type', content: 'website' },
     { property: 'og:image', content: '/aura-news.png' },
     { property: 'og:url', content: typeof window !== 'undefined' ? window.location.href : '' },
@@ -687,25 +735,30 @@ const confidenceLevel = computed(() => {
 </script>
 
 <template>
-  <div class="max-w-2xl mx-auto py-10 px-4 sm:px-6 lg:px-8">
+  <div :class="['max-w-2xl mx-auto py-10 px-4 sm:px-6 lg:px-8', isScamActive ? 'bg-gradient-to-br from-red-50 to-yellow-50' : '']">
     <!-- 使用次數統計 -->
     <div class="mb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between text-sm text-gray-500">
       <div>
-        <span class="font-bold text-blue-700">今日查證：</span>
+        <span :class="['font-bold', isScamActive ? 'text-red-700' : 'text-blue-700']">今日查證：</span>
         <span>{{ usageCount.today }}</span>
         <span class="ml-2">次</span>
         <span class="ml-2 text-xs text-gray-400" title="包含AI查證與站內新聞文章">(含AI+文章)</span>
       </div>
       <div class="mt-1 sm:mt-0">
-        <span class="font-bold text-blue-700">累積查證：</span>
+        <span :class="['font-bold', isScamActive ? 'text-red-700' : 'text-blue-700']">累積查證：</span>
         <span>{{ usageCount.total }}</span>
         <span class="ml-2">次</span>
         <span class="ml-2 text-xs text-gray-400" title="包含AI查證與站內新聞文章">(含AI+文章)</span>
       </div>
     </div>
     <div class="mb-8 text-center">
-      <h1 class="text-3xl font-extrabold text-blue-800 mb-2">AI 假新聞即時掃描</h1>
-      <p class="text-gray-600">輸入新聞內容或網址，AI 將自動查證並給出可信度與建議。</p>
+      <h1 :class="['text-3xl font-extrabold mb-2', isScamActive ? 'text-red-700' : 'text-blue-800']">
+        <template v-if="!isLoading && currentStep < 1">AI 假新聞即時掃描/詐騙偵測</template>
+        <template v-else>{{ isScamActive ? 'AI 詐騙偵測與防詐分析' : 'AI 假新聞即時掃描' }}</template>
+      </h1>
+      <p :class="isScamActive ? 'text-red-600' : 'text-gray-600'">
+        {{ isScamActive ? '⚠️ 本內容疑似詐騙，請提高警覺，勿提供個資或金錢！' : '輸入新聞內容或網址，AI 將自動查證並給出可信度與建議。' }}
+      </p>
     </div>
     <div class="bg-white rounded-xl shadow p-6 mb-6">
       <label class="block text-gray-700 font-semibold mb-2" for="news-input">新聞內容或網址</label>
@@ -732,7 +785,7 @@ const confidenceLevel = computed(() => {
     <div v-if="isLoading || (progress && progress !== '完成')" class="mb-8">
       <div class="flex items-center justify-between mb-2">
         <span class="text-blue-700 font-semibold">AI 掃描進度</span>
-        <span class="text-sm text-gray-500">{{ progress }}</span>
+        <span class="text-sm text-gray-500">{{ progress?.progress || '' }}</span>
       </div>
       
       <!-- 排隊中提示 -->
@@ -786,15 +839,20 @@ const confidenceLevel = computed(() => {
       <div 
         v-if="result" 
         ref="resultSectionRef"
-        class="mt-8 p-8 bg-gradient-to-br from-blue-50 to-white rounded-2xl border border-blue-100 shadow"
-        :class="{ 'result-animation': isResultSectionVisible }"
+        class="mt-8 p-8 rounded-2xl border shadow"
+        :class="[isScamActive ? 'bg-gradient-to-br from-red-100 to-yellow-50 border-red-200' : 'bg-gradient-to-br from-blue-50 to-white border-blue-100', 'result-animation']"
       >
                   <div class="flex items-center justify-between mb-4">
             <div class="flex items-center">
-              <svg class="h-8 w-8 text-green-500 mr-2" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <svg v-if="isScamActive" class="h-8 w-8 text-red-500 mr-2" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M21 12c0 4.97-4.03 9-9 9s-9-4.03-9-9 4.03-9 9-9 9 4.03 9 9z"/>
+              </svg>
+              <svg v-else class="h-8 w-8 text-green-500 mr-2" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2l4-4m5 2a9 9 0 11-18 0a9 9 0 0118 0z"/>
               </svg>
-              <h2 class="text-xl font-bold text-blue-800">AI 判斷結果</h2>
+              <h2 :class="['text-xl font-bold', isScamActive ? 'text-red-700' : 'text-blue-800']">
+                {{ isScamActive ? '詐騙風險分析結果' : 'AI 判斷結果' }}
+              </h2>
             </div>
             <div class="flex space-x-2">
               <button

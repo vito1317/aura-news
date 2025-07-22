@@ -13,5 +13,4 @@ class TrustProxies extends Middleware
      */
     protected $proxies = '*';
 
-    // 不需要 $headers 屬性
 } 

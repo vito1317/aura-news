@@ -25,11 +25,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('articles/{id}/comments', [\App\Http\Controllers\Api\ArticleController::class, 'addComment']);
     Route::delete('/comments/{commentId}', [\App\Http\Controllers\Api\ArticleController::class, 'deleteComment']);
     Route::delete('/comments', [\App\Http\Controllers\Api\ArticleController::class, 'deleteAllComments']);
-    Route::post('/articles/{article}/read', [ArticleRecommendController::class, 'markAsRead']);
 });
 
 // 讓所有人都能取得推薦
 Route::get('/articles/recommend', [ArticleRecommendController::class, 'recommend']);
+Route::post('/articles/{article}/read', [App\Http\Controllers\Api\ArticleRecommendController::class, 'markAsRead']);
 
 Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
     return $request->user();
