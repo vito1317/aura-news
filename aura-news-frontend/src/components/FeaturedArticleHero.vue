@@ -147,13 +147,13 @@ onMounted(() => {
   opacity: 1;
   transform: translateY(0);
 }
-/* Ensure fade-up-text-leave-active is also defined for proper transition when leaving */
+
 .fade-up-text-enter-active,
-.fade-up-text-leave-active { /* Added leave-active */
+.fade-up-text-leave-active { 
   transition: opacity 0.6s cubic-bezier(0.4,0,0.2,1), transform 0.6s cubic-bezier(0.4,0,0.2,1);
 }
 .fade-up-text-enter-from,
-.fade-up-text-leave-to { /* Added leave-to */
+.fade-up-text-leave-to { 
   opacity: 0;
   transform: translateY(40px);
 }

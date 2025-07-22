@@ -57,15 +57,11 @@ function updatePerPage() {
 onMounted(() => {
   updatePerPage();
   window.addEventListener('resize', updatePerPage);
-  // 用 setTimeout 確保 perPage 設定後再載入
   setTimeout(async () => {
   await loadPopularArticles();
   await loadArticles();
-    // 先取推薦
     const rec = (await fetchRecommendedArticles()).slice(0, 3).map(a => ({ ...a, carouselType: '推薦' }));
-    // 最新排除已在推薦的
     const latest = articles.value.filter(a => !rec.some(r => r.id === a.id)).slice(0, 3).map(a => ({ ...a, carouselType: '最新' }));
-    // 熱門排除已在推薦/最新的
     const hot = popularArticles.value.filter(a => !rec.some(r => r.id === a.id) && !latest.some(l => l.id === a.id)).slice(0, 3).map(a => ({ ...a, carouselType: '熱門' }));
     recommendedArticles.value = rec;
     latestArticlesForHero.value = latest;
@@ -127,7 +123,6 @@ const fetchStats = async () => {
 };
 
 const carouselArticles = computed(() => {
-  // 取 4 篇，3 篇最新，1 篇熱門，去除重複
   const latestRaw = latestArticles.value.slice(0, 3);
   const latest = latestRaw.map(a => {
     if (a.carouselType === '最新') return a;
@@ -151,7 +146,6 @@ const carouselArticles = computed(() => {
   return result;
 });
 
-// 新增：排除輪播圖已出現的新聞
 const listArticles = computed(() => {
   const carouselIds = new Set(carouselArticles.value.map(a => a.id));
   return articles.value.filter(a => !carouselIds.has(a.id));
@@ -199,7 +193,7 @@ const stats = computed(() => {
 
 <template>
   <main class="bg-white">
-    <!-- 跑馬燈放在 header 下方 -->
+    
     <MarqueeNews :articles="popularArticles" />
     <div class="bg-gradient-to-r from-blue-600 to-blue-800 text-white py-2 sm:py-3 md:py-4">
       <div class="max-w-7xl mx-auto px-3 sm:px-4 lg:px-8">

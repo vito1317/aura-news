@@ -846,7 +846,7 @@ function searchByKeyword(kw) {
               <h4 class="font-semibold text-gray-800 mb-2 sm:mb-3 text-sm sm:text-base">詳細分析</h4>
               <div class="prose prose-xs sm:prose-sm max-w-none text-gray-700 break-words overflow-hidden" v-html="safeCredibilityAnalysisWithoutSources"></div>
             </div>
-            <!-- 查證出處區塊 -->
+            
             <div v-if="sources" class="mt-6 p-4 rounded-lg bg-blue-50 border-l-4 border-blue-400 text-blue-900 text-sm whitespace-pre-line">
               <strong class="block mb-1 text-blue-700">查證出處</strong>
               <span v-html="linkify(sources)"></span>
@@ -884,7 +884,7 @@ function searchByKeyword(kw) {
           </div>
         </div>
 
-        <!-- 新增：留言板區塊 -->
+        
         <div class="mt-10 sm:mt-14">
           <div class="bg-white rounded-xl shadow p-6 border border-gray-100">
             <h3 class="text-lg sm:text-xl font-bold text-blue-800 mb-4 flex items-center">
@@ -1127,7 +1127,7 @@ span[class*="level"]:not(.level-animation) {
   object-position: center;
 }
 
-/* 熱門度區域動畫 */
+
 .popularity-section {
   animation: slideInFromRight 0.8s ease-out;
 }
@@ -1143,7 +1143,7 @@ span[class*="level"]:not(.level-animation) {
   }
 }
 
-/* 熱門度圖標脈衝動畫 */
+
 @keyframes popularityPulse {
   0%, 100% {
     transform: scale(1);
@@ -1160,7 +1160,7 @@ span[class*="level"]:not(.level-animation) {
   transform-origin: center center;
 }
 
-/* 熱門度進度條動畫 */
+
 @keyframes popularityProgressFill {
   from {
     stroke-dashoffset: 157;
@@ -1178,7 +1178,7 @@ path[class*="popularity-progress"]:not(.popularity-progress-animation) {
   stroke-dashoffset: 0;
 }
 
-/* 熱門度勾選動畫 */
+
 .popularity-check-animation {
   stroke-dasharray: 0 20;
   stroke-dashoffset: 20;
@@ -1206,7 +1206,7 @@ path[class*="popularity-check"]:not(.popularity-check-animation) {
   stroke-dashoffset: 0;
 }
 
-/* 熱門度分數動畫 */
+
 @keyframes popularityScoreFadeIn {
   from {
     opacity: 0;
@@ -1229,7 +1229,7 @@ text[class*="popularity-score"]:not(.popularity-score-animation) {
   transform: scale(1);
 }
 
-/* 熱門度等級動畫 */
+
 @keyframes popularityLevelSlideIn {
   from {
     opacity: 0;
@@ -1252,7 +1252,7 @@ span[class*="popularity-level"]:not(.popularity-level-animation) {
   transform: translateY(0);
 }
 
-/* 熱門度詳細資訊動畫 */
+
 @keyframes popularityDetailsFadeIn {
   from {
     opacity: 0;

@@ -57,7 +57,7 @@ const getStatusText = (status) => {
       <RouterLink :to="{ name: 'admin-articles-create' }" class="bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-2 px-4 rounded-lg w-full sm:w-auto text-center">＋ 新增文章</RouterLink>
     </div>
 
-    <!-- Responsive table container -->
+    
     <div class="bg-white rounded-lg shadow overflow-x-auto">
       <table class="min-w-full divide-y divide-gray-200 text-sm">
         <thead class="bg-gray-50">

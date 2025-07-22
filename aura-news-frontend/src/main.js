@@ -10,7 +10,6 @@ import './assets/main.css';
 axios.defaults.baseURL = 'https://api-news.vito1317.com';
 axios.defaults.withCredentials = true;
 
-// Add a global axios interceptor to attach token if present
 axios.interceptors.request.use(config => {
   const token = localStorage.getItem('token');
   if (token) {
@@ -25,7 +24,6 @@ const head = createHead();
 app.use(head);
 app.use(pinia);
 
-// 必須在 app.use(pinia) 之後再呼叫 useAuthStore
 import { useAuthStore } from './stores/auth';
 const authStore = useAuthStore();
 
@@ -39,7 +37,6 @@ router.beforeEach((to, from, next) => {
   }
 });
 
-// fetchUser 後再掛載 app
 authStore.fetchUser().then(() => {
   app.use(router);
   app.mount('#app');

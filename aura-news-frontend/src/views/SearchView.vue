@@ -17,7 +17,6 @@ const searchArticles = async (searchQuery) => {
   isLoading.value = true;
   try {
     const response = await axios.get(`${API_BASE}/api/search`, { params: { q: searchQuery } });
-    // 讓搜尋同時支援 title、summary、keywords
     articles.value = (response.data.articles.data || []).filter(article => {
       const q = searchQuery.toLowerCase();
       return (

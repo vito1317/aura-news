@@ -8,13 +8,10 @@ const authStore = useAuthStore();
 const router = useRouter();
 const searchQuery = ref('');
 const navLinks = ref([]);
-// --- ↓↓↓ 新增 RWD 相關狀態 ↓↓↓ ---
 const isMenuOpen = ref(false);
-// 監聽路由變化，在跳轉頁面後自動關閉選單
 router.afterEach(() => {
   isMenuOpen.value = false;
 });
-// --- ↑↑↑ RWD 狀態結束 ↑↑↑ ---
 const handleSearch = () => {
   if (searchQuery.value.trim()) {
     router.push({ name: 'search', query: { q: searchQuery.value } });
@@ -47,11 +44,11 @@ onMounted(async () => {
   <header class="bg-white border-b border-gray-200 sticky top-0 z-50">
     <nav class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
       <div class="flex justify-between items-center h-16">
-        <!-- 左側 Logo -->
+        
         <div class="flex items-center">
           <RouterLink to="/" class="text-2xl font-bold text-gray-900">Aura News</RouterLink>
         </div>
-        <!-- 中間導覽連結 (桌機版) -->
+        
         <div class="hidden md:flex md:space-x-1">
           <RouterLink
             v-for="link in navLinks"
@@ -63,16 +60,16 @@ onMounted(async () => {
             {{ link.name }}
           </RouterLink>
         </div>
-        <!-- 右側操作區 -->
+        
         <div class="flex items-center">
-          <!-- 搜尋框 (桌機/平板) -->
+          
           <form @submit.prevent="handleSearch" class="relative hidden sm:block">
             <input type="text" v-model="searchQuery" placeholder="搜尋..." class="border-gray-300 rounded-full pl-4 pr-10 py-1 text-sm focus:ring-brand-DEFAULT focus:border-brand-DEFAULT">
             <button type="submit" class="absolute inset-y-0 right-0 px-3 text-gray-500">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
             </button>
           </form>
-          <!-- 使用者區塊 -->
+          
           <template v-if="authStore.isAuthenticated">
             <div class="ml-4 flex items-center space-x-2">
               <span class="text-gray-700 font-semibold">{{ authStore.user.nickname }}</span>
@@ -89,20 +86,20 @@ onMounted(async () => {
               <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
             </RouterLink>
           </template>
-          <!-- 手機版漢堡選單按鈕 (只在 md 以下的螢幕顯示) -->
+          
           <div class="ml-2 md:hidden">
             <button @click="isMenuOpen = !isMenuOpen" class="inline-flex items-center justify-center p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-brand-DEFAULT">
               <span class="sr-only">Open main menu</span>
-              <!-- 關閉時的圖示 -->
+              
               <svg v-if="!isMenuOpen" class="block h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" /></svg>
-              <!-- 開啟時的圖示 -->
+              
               <svg v-else class="block h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
             </button>
           </div>
         </div>
       </div>
     </nav>
-    <!-- 手機版彈出選單 -->
+    
     <transition
       enter-active-class="transition ease-out duration-200"
       enter-from-class="transform opacity-0 scale-95"
@@ -113,7 +110,7 @@ onMounted(async () => {
     >
       <div v-if="isMenuOpen" class="md:hidden">
         <div class="px-2 pt-2 pb-3 space-y-1 sm:px-3">
-          <!-- 手機版搜尋框 -->
+          
           <form @submit.prevent="handleSearch" class="mb-3">
             <div class="relative">
               <input type="text" v-model="searchQuery" placeholder="搜尋..." class="w-full border-gray-300 rounded-full pl-4 pr-10 py-2 text-base focus:ring-brand-DEFAULT focus:border-brand-DEFAULT">

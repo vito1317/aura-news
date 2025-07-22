@@ -42,7 +42,6 @@ const isVerifiedContentExpanded = ref(false);
 const showShareSuccess = ref(false);
 const progressCanvasRef = ref(null);
 
-// ✅ DEFINE COMPUTED PROPERTIES HERE
 const confidence = computed(() => {
   if (!result.value?.result) return null;
   const match = result.value.result.match(/【可信度：(\d+)%?】/);
@@ -59,11 +58,9 @@ const confidenceColor = computed(() => {
 
 const isScam = computed(() => {
   if (!result.value?.result) return false;
-  // 嘗試解析 scam 標記
   try {
     const scamMatch = result.value.result.match(/"is_scam"\s*:\s*(true|false)/);
     if (scamMatch) return scamMatch[1] === 'true';
-    // 也支援【詐騙】、【scam】等關鍵字
     if (/詐騙|scam/i.test(result.value.result)) return true;
   } catch (e) {}
   return false;
@@ -80,13 +77,11 @@ function drawProgressCanvas() {
   canvas.width = size;
   canvas.height = size;
   ctx.clearRect(0, 0, size, size);
-  // 背景圓
   ctx.beginPath();
   ctx.arc(center, center, radius, 0, 2 * Math.PI);
   ctx.strokeStyle = '#f3f4f6';
   ctx.lineWidth = lineWidth;
   ctx.stroke();
-  // 進度條
   const percent = confidence.value || 0;
   const startAngle = -Math.PI / 2;
   const endAngle = startAngle + (2 * Math.PI * percent / 100);
@@ -96,7 +91,6 @@ function drawProgressCanvas() {
   ctx.lineWidth = lineWidth;
   ctx.lineCap = 'round';
   ctx.stroke();
-  // 百分比文字
   ctx.font = 'bold 44px Arial';
   ctx.fillStyle = confidenceColor.value;
   ctx.textAlign = 'center';
@@ -104,7 +98,6 @@ function drawProgressCanvas() {
   ctx.fillText(percent + '%', center, center);
 }
 
-// ✅ NOW THIS WATCHER CAN SAFELY ACCESS `confidence`
 watch([isSavingImage, confidence], ([saving]) => {
   if (saving) {
     nextTick(() => drawProgressCanvas());
@@ -147,7 +140,6 @@ const currentStep = computed(() => {
 });
 
 const scamStepIndex = computed(() => steps.value.findIndex(s => s.includes('AI 偵測內容類型')));
-// 新增：AI 偵測內容類型步驟時，直接從 progress API 的 detectionData 判斷主題
 const isScamActive = computed(() => {
   const p = progress.value || {};
   if (
@@ -235,7 +227,6 @@ const pollProgress = (taskId) => {
       const res = await axios.get(`${import.meta.env.VITE_API_BASE}/api/ai/scan-fake-news/progress/${taskId}`);
       progress.value = res.data;
       
-      // 檢查是否排隊中
       if (res.data.isQueued) {
         isQueued.value = true;
       }
@@ -274,7 +265,6 @@ const pollProgress = (taskId) => {
         nextTick(() => {
           setupAnimationWhenResultAvailable();
         });
-        // 查證完成後自動更新次數
         fetchUsageCount();
       }
       
@@ -363,7 +353,6 @@ const setupAnimationWhenResultAvailable = () => {
   }
 };
 
-// 檢查 URL 參數並載入結果
 const loadResultFromUrl = async () => {
   const urlParams = new URLSearchParams(window.location.search);
   const taskId = urlParams.get('task_id');
@@ -386,7 +375,6 @@ const loadResultFromUrl = async () => {
         };
         currentTaskId.value = data.task_id;
         
-        // 觸發動畫
         nextTick(() => {
           setupAnimationWhenResultAvailable();
         });
@@ -400,7 +388,6 @@ const loadResultFromUrl = async () => {
   }
 };
 
-// 生成預覽圖片
 const generatePreviewImage = async () => {
   if (!resultSectionRef.value) return;
   isSavingImage.value = true;
@@ -412,13 +399,11 @@ const generatePreviewImage = async () => {
     hasAnimationStarted.value = true;
     await nextTick();
 
-    // 1. 找到原本的 SVG
     svg = resultSectionRef.value.querySelector('svg');
     if (svg) {
       svgParent = svg.parentNode;
       originalSvgNextSibling = svg.nextSibling;
       svgClone = svg.cloneNode(true);
-      // 設定進度條為最終靜態狀態
       const circles = svgClone.querySelectorAll('circle');
       if (circles.length > 1) {
         const progressCircle = circles[1];
@@ -427,7 +412,6 @@ const generatePreviewImage = async () => {
         progressCircle.setAttribute('stroke-dashoffset', finalOffset);
         progressCircle.classList.remove('progress-animation');
       }
-      // 用靜態 SVG 替換原本 SVG
       svg.style.display = 'none';
       if (originalSvgNextSibling) {
         svgParent.insertBefore(svgClone, originalSvgNextSibling);
@@ -437,10 +421,8 @@ const generatePreviewImage = async () => {
       await nextTick();
     }
     
-    // 等待 DOM 更新
     await nextTick();
     
-    // 只禁用特定動畫，保留定位
     const style = document.createElement('style');
     style.id = 'disable-animations';
     style.textContent = `
@@ -458,11 +440,9 @@ const generatePreviewImage = async () => {
     `;
     document.head.appendChild(style);
     
-    // 生成包含 task_id 的 URL
     const baseUrl = window.location.origin + window.location.pathname;
     const qrUrl = currentTaskId.value ? `${baseUrl}?task_id=${currentTaskId.value}` : window.location.href;
     
-    // 先生成 QR Code
     let qrCodeDataUrl;
     try {
       qrCodeDataUrl = await QRCode.toDataURL(qrUrl, {
@@ -475,7 +455,6 @@ const generatePreviewImage = async () => {
         errorCorrectionLevel: 'M'
       });
     } catch (qrError) {
-      // 如果 QR Code 生成失敗，使用預設的 URL
       qrCodeDataUrl = await QRCode.toDataURL('https://aura-news.com', {
         width: 80,
         margin: 1,
@@ -486,7 +465,6 @@ const generatePreviewImage = async () => {
       });
     }
     
-    // 在 DOM 中添加 QR Code 元素
     const qrContainer = document.createElement('div');
     qrContainer.style.position = 'absolute';
     qrContainer.style.bottom = '25px';
@@ -515,7 +493,6 @@ const generatePreviewImage = async () => {
     qrContainer.appendChild(qrImg);
     qrContainer.appendChild(qrText);
     
-    // 確保 resultSectionRef 有相對定位
     if (resultSectionRef.value.style.position !== 'relative') {
       resultSectionRef.value.style.position = 'relative';
     }
@@ -543,22 +520,18 @@ const generatePreviewImage = async () => {
     qrCodeUrl.value = qrCodeDataUrl;
     showPreview.value = true;
     
-    // 移除 QR Code 元素
     if (qrContainer && qrContainer.parentNode) {
       qrContainer.parentNode.removeChild(qrContainer);
     }
     
-    // 移除禁用動畫的樣式
     const disableStyle = document.getElementById('disable-animations');
     if (disableStyle) {
       disableStyle.remove();
     }
     
-    // 恢復動畫狀態
     isResultSectionVisible.value = originalVisibility;
     hasAnimationStarted.value = originalAnimation;
     
-    // 恢復原本 SVG
     if (svg && svgClone) {
       svg.style.display = '';
       svgClone.remove();
@@ -568,17 +541,14 @@ const generatePreviewImage = async () => {
     console.error('生成預覽圖片失敗:', error);
     alert('生成預覽圖片失敗，請稍後再試');
     
-    // 移除禁用動畫的樣式
     const disableStyle = document.getElementById('disable-animations');
     if (disableStyle) {
       disableStyle.remove();
     }
     
-    // 錯誤時也要恢復動畫狀態
     isResultSectionVisible.value = originalVisibility;
     hasAnimationStarted.value = originalAnimation;
     
-    // 恢復原本 SVG
     if (svg && svgClone) {
       svg.style.display = '';
       svgClone.remove();
@@ -631,21 +601,18 @@ const shareResult = async () => {
   }
 };
 
-// 加上分享連結函數：
 const shareResultLink = async () => {
   const baseUrl = window.location.origin + window.location.pathname;
   const shareUrl = currentTaskId.value ? `${baseUrl}?task_id=${currentTaskId.value}` : window.location.href;
   
   try {
     if (navigator.share) {
-      // 使用 Web Share API
       await navigator.share({
         title: 'AI 假新聞查證結果',
         text: `可信度: ${confidence.value}% - ${input.value.slice(0, 50)}...`,
         url: shareUrl,
       });
     } else {
-      // 複製連結到剪貼簿
       await navigator.clipboard.writeText(shareUrl);
       showShareSuccess.value = true;
       setTimeout(() => {
@@ -654,7 +621,6 @@ const shareResultLink = async () => {
     }
   } catch (error) {
     console.error('分享失敗:', error);
-    // 如果剪貼簿 API 失敗，使用傳統方法
     try {
       const textArea = document.createElement('textarea');
       textArea.value = shareUrl;
@@ -674,7 +640,6 @@ const shareResultLink = async () => {
   }
 };
 
-// 使用次數統計
 const usageCount = ref({ total: 0, today: 0 });
 const fetchUsageCount = async () => {
   try {
@@ -685,7 +650,6 @@ const fetchUsageCount = async () => {
   }
 };
 
-// 組件掛載時檢查 URL 參數
 onMounted(() => {
   loadResultFromUrl();
   fetchUsageCount();
@@ -738,17 +702,15 @@ const isInitialStep = computed(() => {
   );
 });
 
-// ✅ New computed property to control the main title display
 const shouldShowInitialTitle = computed(() => {
   const currentStepIndex = currentStep.value;
-  // Show initial title if no result yet, and we are in the first two steps (index 0 or 1)
   return !result.value && (currentStepIndex === 0 || currentStepIndex === 1);
 });
 </script>
 
 <template>
   <div :class="['max-w-2xl mx-auto py-10 px-4 sm:px-6 lg:px-8', isScamActive ? 'bg-gradient-to-br from-red-50 to-yellow-50' : '']">
-    <!-- 使用次數統計 -->
+    
     <div class="mb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between text-sm text-gray-500">
       <div>
         <span :class="['font-bold', isScamActive ? 'text-red-700' : 'text-blue-700']">今日查證：</span>
@@ -805,7 +767,7 @@ const shouldShowInitialTitle = computed(() => {
         <span class="text-sm text-gray-500">{{ progress?.progress || '' }}</span>
       </div>
       
-      <!-- 排隊中提示 -->
+      
       <div v-if="isQueued" class="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
         <div class="flex items-center">
           <svg class="h-5 w-5 text-yellow-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1009,7 +971,7 @@ const shouldShowInitialTitle = computed(() => {
       </div>
     </transition>
 
-    <!-- 預覽模態框 -->
+    
     <transition name="modal">
       <div v-if="showPreview" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
         <div class="bg-white rounded-2xl max-w-4xl max-h-[90vh] overflow-hidden shadow-2xl">
@@ -1061,7 +1023,7 @@ const shouldShowInitialTitle = computed(() => {
       </div>
     </transition>
 
-    <!-- 分享成功提示 -->
+    
     <transition name="fade">
       <div v-if="showShareSuccess" class="fixed top-4 right-4 bg-green-500 text-white px-4 py-2 rounded-lg shadow-lg z-50">
         <div class="flex items-center">
@@ -1083,7 +1045,7 @@ const shouldShowInitialTitle = computed(() => {
   opacity: 0;
 }
 
-/* 可信度圖標動畫效果 */
+
 @keyframes credibilityPulse {
   0%, 100% {
     transform: scale(1);
@@ -1099,10 +1061,10 @@ const shouldShowInitialTitle = computed(() => {
   animation: credibilityPulse 2s ease-in-out infinite;
 }
 
-/* 圓形進度條動畫 */
+
 @keyframes progressFill {
   from {
-    stroke-dashoffset: 471; /* 2 * Math.PI * 75 */
+    stroke-dashoffset: 471; 
   }
   to {
     stroke-dashoffset: var(--final-offset, 0);
@@ -1113,12 +1075,12 @@ const shouldShowInitialTitle = computed(() => {
   animation: progressFill 1.5s ease-out forwards;
 }
 
-/* 確保進度條在沒有動畫時也能正常顯示 */
+
 circle[class*="progress"]:not(.progress-animation) {
   stroke-dashoffset: 0;
 }
 
-/* 分數文字動畫 */
+
 @keyframes scoreFadeIn {
   from {
     opacity: 0;
@@ -1136,13 +1098,13 @@ circle[class*="progress"]:not(.progress-animation) {
   transform: scale(0.8);
 }
 
-/* 確保 SVG 文字元素在沒有動畫時也能正常顯示 */
+
 text:not(.score-animation) {
   opacity: 1;
   transform: scale(1);
 }
 
-/* 等級標籤動畫 */
+
 @keyframes levelSlideIn {
   from {
     opacity: 0;
@@ -1160,13 +1122,13 @@ text:not(.score-animation) {
   transform: translateY(20px);
 }
 
-/* 確保等級標籤在沒有動畫時也能正常顯示 */
+
 span[class*="level"]:not(.level-animation) {
   opacity: 1;
   transform: translateY(0);
 }
 
-/* 結果區塊動畫 */
+
 @keyframes resultFadeIn {
   from {
     opacity: 0;
@@ -1184,13 +1146,13 @@ span[class*="level"]:not(.level-animation) {
   transform: translateY(30px);
 }
 
-/* 確保結果區塊在沒有動畫時也能正常顯示 */
+
 div[class*="result"]:not(.result-animation) {
   opacity: 1;
   transform: translateY(0);
 }
 
-/* 分析內容動畫 */
+
 @keyframes analysisFadeIn {
   from {
     opacity: 0;
@@ -1208,13 +1170,13 @@ div[class*="result"]:not(.result-animation) {
   transform: translateY(30px);
 }
 
-/* 確保分析內容在沒有動畫時也能正常顯示 */
+
 div[class*="analysis"]:not(.analysis-animation) {
   opacity: 1;
   transform: translateY(0);
 }
 
-/* 查證出處動畫 */
+
 @keyframes sourcesSlideIn {
   from {
     opacity: 0;
@@ -1232,13 +1194,13 @@ div[class*="analysis"]:not(.analysis-animation) {
   transform: translateY(30px);
 }
 
-/* 確保查證出處在沒有動畫時也能正常顯示 */
+
 div[class*="sources"]:not(.sources-animation) {
   opacity: 1;
   transform: translateY(0);
 }
 
-/* 模態框動畫 */
+
 .modal-enter-active, .modal-leave-active {
   transition: all 0.3s ease;
 }

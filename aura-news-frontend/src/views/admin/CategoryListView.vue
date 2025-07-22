@@ -97,7 +97,7 @@ onMounted(fetchCategories);
       <button type="submit" :disabled="isSubmitting" class="bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-2 px-6 rounded-lg w-full sm:w-auto">新增</button>
     </form>
     <div v-if="formError" class="text-red-500 mb-4">{{ formError }}</div>
-    <!-- Responsive table container -->
+    
     <div class="bg-white rounded-lg shadow overflow-x-auto">
       <table class="min-w-full divide-y divide-gray-200 text-sm">
         <thead class="bg-gray-50">

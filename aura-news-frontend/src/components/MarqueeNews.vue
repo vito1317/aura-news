@@ -7,12 +7,9 @@ const props = defineProps({
     required: true
   }
 });
-// 只取高熱門度，並隨機排序
 const randomHotArticles = computed(() => {
   const arr = unref(props.articles);
-  // 過濾高熱門度（popularity_score > 65）
   const hot = Array.isArray(arr) ? arr.filter(a => Number(a.popularity_score) > 65) : [];
-  // 洗牌
   for (let i = hot.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
     [hot[i], hot[j]] = [hot[j], hot[i]];
@@ -40,7 +37,7 @@ console.log('MarqueeNews randomHotArticles:', randomHotArticles);
             </RouterLink>
             <span v-if="randomHotArticles && idx !== randomHotArticles.length - 1" class="mx-2 opacity-60 marquee-sep">|</span>
           </template>
-          <!-- 複製一份內容，無縫輪播 -->
+          
           <template v-for="(article, idx) in randomHotArticles" :key="'copy-' + article.id">
             <RouterLink
               :to="{ name: 'article-detail', params: { id: article.id } }"

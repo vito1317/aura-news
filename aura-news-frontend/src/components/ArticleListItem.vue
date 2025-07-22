@@ -23,7 +23,7 @@ const formatDate = (dateString) => new Date(dateString).toLocaleDateString();
 
     <div class="col-span-2">
       <div class="text-xs text-gray-500 mb-1">
-        <!-- 桌面版：水平排列 -->
+        
         <div class="hidden sm:flex sm:items-center sm:space-x-2">
         <span v-if="article.category" class="font-medium text-brand-DEFAULT">{{ article.category.name }}</span>
         <span v-if="article.category">·</span>
@@ -37,7 +37,7 @@ const formatDate = (dateString) => new Date(dateString).toLocaleDateString();
           </span>
         </div>
         
-        <!-- 手機版：垂直排列 -->
+        
         <div class="sm:hidden space-y-0.5">
           <div v-if="article.category" class="font-medium text-brand-DEFAULT">{{ article.category.name }}</div>
           <div>{{ formatDate(article.published_at) }}</div>

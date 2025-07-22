@@ -4,7 +4,6 @@ import { computed } from 'vue';
 
 const props = defineProps({ articles: Array });
 
-// 直接使用已排序的文章，只取前10篇
 const popularArticles = computed(() => {
   if (!props.articles || !Array.isArray(props.articles)) {
     return [];

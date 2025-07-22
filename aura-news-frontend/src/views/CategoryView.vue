@@ -28,10 +28,8 @@ const fetchCategoryArticles = async (slug, page = 1, append = false) => {
     category.value = response.data.category;
     
     if (append) {
-      // 追加模式：新增文章到現有列表
       articles.value.push(...response.data.articles.data);
     } else {
-      // 初始載入：替換整個列表
     articles.value = response.data.articles.data;
     }
     
@@ -60,7 +58,6 @@ const fetchCategoryArticles = async (slug, page = 1, append = false) => {
   }
 };
 
-// 載入更多文章
 const loadMore = async () => {
   if (isLoadingMore.value || !hasMore.value) return;
   await fetchCategoryArticles(route.params.slug, currentPage.value + 1, true);
@@ -90,7 +87,7 @@ watch(() => route.params.slug, (newSlug) => {
           <ArticleCard v-for="article in articles" :key="article.id" :article="article" />
         </div>
         
-        <!-- 載入更多按鈕 -->
+        
         <div v-if="hasMore" class="text-center pt-8">
           <button 
             @click="loadMore"
@@ -105,7 +102,7 @@ watch(() => route.params.slug, (newSlug) => {
           </button>
         </div>
         
-        <!-- 已載入全部文章提示 -->
+        
         <div v-else-if="articles.length > 0" class="text-center py-8">
           <div class="text-gray-500">
             <svg class="w-8 h-8 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
