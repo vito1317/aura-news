@@ -234,7 +234,6 @@ const pollProgress = (taskId) => {
     try {
       const res = await axios.get(`${import.meta.env.VITE_API_BASE}/api/ai/scan-fake-news/progress/${taskId}`);
       progress.value = res.data;
-      console.log('[pollProgress debug]', res.data);
       
       // 檢查是否排隊中
       if (res.data.isQueued) {
@@ -462,7 +461,6 @@ const generatePreviewImage = async () => {
     // 生成包含 task_id 的 URL
     const baseUrl = window.location.origin + window.location.pathname;
     const qrUrl = currentTaskId.value ? `${baseUrl}?task_id=${currentTaskId.value}` : window.location.href;
-    console.log('生成 QR Code 的 URL:', qrUrl);
     
     // 先生成 QR Code
     let qrCodeDataUrl;
@@ -476,9 +474,7 @@ const generatePreviewImage = async () => {
         },
         errorCorrectionLevel: 'M'
       });
-      console.log('QR Code 生成成功');
     } catch (qrError) {
-      console.error('QR Code 生成失敗:', qrError);
       // 如果 QR Code 生成失敗，使用預設的 URL
       qrCodeDataUrl = await QRCode.toDataURL('https://aura-news.com', {
         width: 80,
@@ -525,9 +521,6 @@ const generatePreviewImage = async () => {
     }
     
     resultSectionRef.value.appendChild(qrContainer);
-    
-    console.log('QR Code 元素已添加到 DOM');
-    console.log('QR Code Data URL 長度:', qrCodeDataUrl.length);
     
     await new Promise(resolve => setTimeout(resolve, 2000));
     
@@ -732,6 +725,25 @@ const confidenceLevel = computed(() => {
   if (confidence.value >= 20) return '低可信度';
   return '極低可信度';
 });
+
+const isInitialStep = computed(() => {
+  const p = progress.value?.progress || '';
+  return (
+    p === '' || // When no progress is available yet (initial state)
+    p.includes('分析內容') ||
+    p.includes('分析網址') ||
+    p.includes('抓取主文') ||
+    p.includes('已接收請求') ||
+    p.includes('AI 偵測內容類型') // Keep this as initial step
+  );
+});
+
+// ✅ New computed property to control the main title display
+const shouldShowInitialTitle = computed(() => {
+  const currentStepIndex = currentStep.value;
+  // Show initial title if no result yet, and we are in the first two steps (index 0 or 1)
+  return !result.value && (currentStepIndex === 0 || currentStepIndex === 1);
+});
 </script>
 
 <template>
@@ -753,9 +765,14 @@ const confidenceLevel = computed(() => {
     </div>
     <div class="mb-8 text-center">
       <h1 :class="['text-3xl font-extrabold mb-2', isScamActive ? 'text-red-700' : 'text-blue-800']">
-        <template v-if="!isLoading && currentStep < 1">AI 假新聞即時掃描/詐騙偵測</template>
-        <template v-else>{{ isScamActive ? 'AI 詐騙偵測與防詐分析' : 'AI 假新聞即時掃描' }}</template>
+        <template v-if="shouldShowInitialTitle">
+          AI 假新聞即時掃描/詐騙偵測
+        </template>
+        <template v-else>
+          {{ isScamActive ? 'AI 詐騙偵測與防詐分析' : 'AI 假新聞即時掃描' }}
+        </template>
       </h1>
+
       <p :class="isScamActive ? 'text-red-600' : 'text-gray-600'">
         {{ isScamActive ? '⚠️ 本內容疑似詐騙，請提高警覺，勿提供個資或金錢！' : '輸入新聞內容或網址，AI 將自動查證並給出可信度與建議。' }}
       </p>
