@@ -35,14 +35,14 @@ class ArticleController extends Controller
             'image_url' => 'nullable|string|url',
             'category_id' => 'required|exists:categories,id',
             'source_url' => 'nullable|string|url',
-            'keywords' => 'nullable|string', // 新增關鍵字驗證
+            'keywords' => 'nullable|string',
         ]);
 
         $article = Article::create(array_merge($validatedData, [
             'source_url' => $validatedData['source_url'] ?? null,
             'author' => 'Admin',
             'published_at' => now(),
-            'keywords' => $validatedData['keywords'] ?? null, // 確保寫入
+            'keywords' => $validatedData['keywords'] ?? null,
         ]));
 
         return response()->json($article, 201);
@@ -63,7 +63,7 @@ class ArticleController extends Controller
             'status' => ['required', Rule::in([1, 2, 3])],
             'image_url' => 'nullable|string|url',
             'category_id' => 'required|exists:categories,id',
-            'keywords' => 'nullable|string', // 新增關鍵字驗證
+            'keywords' => 'nullable|string',
         ]);
         $article->update($validatedData);
         return response()->json($article);
