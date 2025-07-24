@@ -24,10 +24,8 @@ class UpdatePopularArticles implements ShouldQueue
     public function handle()
     {
         if ($this->articleId) {
-            // 更新單篇文章
             $this->updateSingleArticle();
         } else {
-            // 更新所有文章
             $this->updateAllArticles();
         }
     }
@@ -55,7 +53,6 @@ class UpdatePopularArticles implements ShouldQueue
             ->get();
         
         foreach ($articles as $article) {
-            // 若 keywords 為空，自動補齊
             if (empty($article->keywords)) {
                 try {
                     $gemini = resolve(\Gemini\Client::class);
@@ -71,7 +68,6 @@ class UpdatePopularArticles implements ShouldQueue
             }
             $popularityScore = $this->calculatePopularityScore($article);
             
-            // 更新文章熱門度分數
             $article->update(['popularity_score' => $popularityScore]);
             \Log::info("文章 ID: {$article->id}, 熱門度分數: {$popularityScore}");
         }
