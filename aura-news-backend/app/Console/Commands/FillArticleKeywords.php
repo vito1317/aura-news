@@ -7,7 +7,7 @@ use App\Models\Article;
 
 class FillArticleKeywords extends Command
 {
-    protected $signature = 'articles:fill-keywords';
+    protected $signature = 'app:fill-keywords';
     protected $description = '補齊未產生關鍵字的文章';
 
     public function handle()

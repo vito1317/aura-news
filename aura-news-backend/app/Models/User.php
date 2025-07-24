@@ -8,11 +8,13 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 use Laravel\Scout\Searchable;
+use Spatie\LaravelPasskeys\Models\Concerns\InteractsWithPasskeys;
+use Spatie\LaravelPasskeys\Models\Concerns\HasPasskeys;
 
-class User extends Authenticatable
+class User extends Authenticatable implements HasPasskeys
 {
     /** @use HasFactory<\Database\Factories\UserFactory> */
-    use HasFactory, Notifiable, HasApiTokens, Searchable;
+    use HasFactory, Notifiable, HasApiTokens, Searchable, InteractsWithPasskeys;
 
     /**
      * The attributes that are mass assignable.

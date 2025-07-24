@@ -11,8 +11,8 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('user_read_histories', function (Blueprint $table) {
-            $table->unsignedBigInteger('user_id')->nullable()->change();
+        Schema::table('passkeys', function (Blueprint $table) {
+            $table->string('email')->nullable()->after('authenticatable_id');
         });
     }
 
@@ -21,8 +21,8 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::table('user_read_histories', function (Blueprint $table) {
-            $table->unsignedBigInteger('user_id')->nullable(false)->change();
+        Schema::table('passkeys', function (Blueprint $table) {
+            $table->dropColumn('email');
         });
     }
 };

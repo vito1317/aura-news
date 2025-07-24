@@ -17,12 +17,17 @@
         "laravel/framework": "^12.0",
         "laravel/sanctum": "^4.0",
         "laravel/scout": "^10.16",
+        "laravel/socialite": "^5.22",
         "laravel/tinker": "^2.10.1",
         "league/html-to-markdown": "^5.1",
         "mews/purifier": "^3.4",
+        "nyholm/psr7": "^1.8",
         "overtrue/laravel-pinyin": "~4.0",
+        "spatie/laravel-passkeys": "^1.0",
         "symfony/http-client": "^7.3",
-        "teamtnt/laravel-scout-tntsearch-driver": "^15.0"
+        "teamtnt/laravel-scout-tntsearch-driver": "^15.0",
+        "web-auth/webauthn-framework": "^5.2",
+        "web-auth/webauthn-lib": "*"
     },
     "require-dev": {
         "fakerphp/faker": "^1.23",

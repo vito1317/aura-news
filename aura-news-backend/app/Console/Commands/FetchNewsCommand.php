@@ -238,6 +238,12 @@ class FetchNewsCommand extends Command
                 $keywords = null;
             }
 
+            // 新增：過濾主文少於500字的文章
+            if (mb_strlen(strip_tags($content)) < 500) {
+                $this->warn('主文少於500字，略過: ' . $fetchedArticle['title']);
+                continue;
+            }
+
             // 在建立 Article 前，檢查標題與內文相關性
             $isRelated = true;
             try {

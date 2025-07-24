@@ -24,6 +24,7 @@ const form = ref({
   image_url: null,
   category_id: null,
   keywords: '',
+  source_url: '', // 新增原文出處欄位
 });
 
 const categories = ref([]);
@@ -221,6 +222,10 @@ watch(mode, (newMode) => {
       <div>
         <label for="summary" class="block text-sm font-medium text-gray-700">摘要 (選填)</label>
         <input type="text" id="summary" v-model="form.summary" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm">
+      </div>
+      <div>
+        <label for="source_url" class="block text-sm font-medium text-gray-700">原文出處 (選填)</label>
+        <input type="text" id="source_url" v-model="form.source_url" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm" placeholder="https://example.com/news/123">
       </div>
       <div>
         <label for="status" class="block text-sm font-medium text-gray-700">狀態</label>

@@ -273,6 +273,11 @@ class ProcessArticleData implements ShouldQueue
             }
 
             $plainText = trim(strip_tags($cleanContent));
+            // 新增：過濾主文少於500字的文章
+            if (mb_strlen($plainText) < 500) {
+                \Log::warning('主文少於500字，略過 AI 任務，article ID: ' . $this->article->id);
+                return;
+            }
             
             \Log::info('AI 產生新聞前主文長度', [
                 'length' => mb_strlen($plainText),

@@ -49,6 +49,21 @@ const router = createRouter({
       component: () => import('@/views/UserSettingsView.vue'),
       meta: { requiresAuth: true }
     },
+    {
+      path: '/auth/google/callback',
+      name: 'google-callback',
+      component: () => import('../views/GoogleCallbackView.vue')
+    },
+    {
+      path: '/terms',
+      name: 'terms',
+      component: () => import('@/views/TermsView.vue')
+    },
+    {
+      path: '/privacy',
+      name: 'privacy',
+      component: () => import('@/views/PrivacyView.vue')
+    },
 
     {
       path: '/admin',

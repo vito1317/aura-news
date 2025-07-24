@@ -35,12 +35,14 @@ class ArticleController extends Controller
             'image_url' => 'nullable|string|url',
             'category_id' => 'required|exists:categories,id',
             'source_url' => 'nullable|string|url',
+            'keywords' => 'nullable|string', // 新增關鍵字驗證
         ]);
 
         $article = Article::create(array_merge($validatedData, [
             'source_url' => $validatedData['source_url'] ?? null,
             'author' => 'Admin',
             'published_at' => now(),
+            'keywords' => $validatedData['keywords'] ?? null, // 確保寫入
         ]));
 
         return response()->json($article, 201);
@@ -61,8 +63,8 @@ class ArticleController extends Controller
             'status' => ['required', Rule::in([1, 2, 3])],
             'image_url' => 'nullable|string|url',
             'category_id' => 'required|exists:categories,id',
+            'keywords' => 'nullable|string', // 新增關鍵字驗證
         ]);
-
         $article->update($validatedData);
         return response()->json($article);
     }
@@ -305,9 +307,14 @@ class ArticleController extends Controller
             return response()->json(['message' => '主文擷取失敗: ' . $e->getMessage()], 422);
         }
         $plainText = trim(strip_tags($cleanContent));
+        // 新增：過濾主文少於500字的文章
+        if (mb_strlen($plainText) < 500) {
+            return response()->json(['message' => '主文內容過短（少於500字），無法產生新聞稿'], 422);
+        }
         // 主文最後加上原文出處
-        if ($plainText && preg_match('/^https?:\/\//i', trim($url))) {
-            $plainText .= "\n\n---\n資料來源：<a href='" . trim($url) . "' target='_blank' rel='noopener noreferrer'>" . trim($url) . "</a>";
+        $sourceUrl = $request->input('source_url') ?? $url;
+        if ($plainText && preg_match('/^https?:\/\//i', trim($sourceUrl))) {
+            $plainText .= "\n\n---\n資料來源：<a href='" . trim($sourceUrl) . "' target='_blank' rel='noopener noreferrer'>" . trim($sourceUrl) . "</a>";
         }
         if (mb_strlen($plainText) < 100) {
             return response()->json(['message' => '主文內容過短，無法產生新聞稿'], 422);

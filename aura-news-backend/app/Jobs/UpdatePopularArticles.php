@@ -55,6 +55,20 @@ class UpdatePopularArticles implements ShouldQueue
             ->get();
         
         foreach ($articles as $article) {
+            // 若 keywords 為空，自動補齊
+            if (empty($article->keywords)) {
+                try {
+                    $gemini = resolve(\Gemini\Client::class);
+                    $prompt = "請根據以下新聞內容，產生3~5個適合用於分類與推薦的繁體中文關鍵字或短語，僅回傳關鍵字本身，用逗號分隔：\n\n" . strip_tags($article->content);
+                    $result = $gemini->generativeModel('gemini-2.5-flash-lite-preview-06-17')->generateContent($prompt);
+                    $keywords = trim(str_replace(["\n", "。", "，"], [',', '', ','], $result->text()));
+                    $article->keywords = $keywords;
+                    $article->save();
+                    \Log::info('已補齊關鍵字: ' . $article->id . ' => ' . $keywords);
+                } catch (\Exception $e) {
+                    \Log::error('補齊關鍵字失敗: ' . $article->id . ' - ' . $e->getMessage());
+                }
+            }
             $popularityScore = $this->calculatePopularityScore($article);
             
             // 更新文章熱門度分數

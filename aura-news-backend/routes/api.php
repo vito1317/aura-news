@@ -14,6 +14,9 @@ use App\Http\Controllers\Api\ArticleSearchController;
 use App\Http\Controllers\Api\ArticleCredibilityController;
 use App\Http\Controllers\Api\NewsDataController;
 use App\Http\Controllers\Api\ArticleRecommendController;
+use App\Http\Controllers\Api\WebauthnController;
+use Spatie\LaravelPasskeys\Models\Passkey;
+use App\Models\User;
 
 Route::post('/login', [AuthController::class, 'login']);
 Route::post('register', [\App\Http\Controllers\Api\AuthController::class, 'register']);
@@ -71,4 +74,21 @@ Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->name('admin.')->g
     Route::apiResource('articles', AdminArticleController::class);
     Route::post('articles/ai-generate', [AdminArticleController::class, 'aiGenerate']);
     Route::apiResource('categories', CategoryController::class);
+});
+
+Route::get('auth/google/redirect', [AuthController::class, 'redirectToGoogle']);
+Route::get('auth/google/callback', [AuthController::class, 'handleGoogleCallback']);
+Route::post('/passkey/register/options', [\App\Http\Controllers\PasskeyRegisterController::class, 'options']);
+Route::post('/passkey/register/verify', [\App\Http\Controllers\PasskeyRegisterController::class, 'verify']);
+Route::post('/passkey/login/options', [\App\Http\Controllers\PasskeyLoginController::class, 'options']);
+Route::post('/passkey/login/verify', [\App\Http\Controllers\PasskeyLoginController::class, 'verify']);
+
+Route::get('/passkey/check', function (Request $request) {
+    $email = $request->query('email');
+    $user = User::where('email', $email)->first();
+    if (!$user) {
+        return response()->json(['exists' => false]);
+    }
+    $hasPasskey = Passkey::where('authenticatable_id', $user->id)->exists();
+    return response()->json(['exists' => $hasPasskey]);
 });

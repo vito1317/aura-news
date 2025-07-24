@@ -11,11 +11,13 @@
     "format": "prettier --write src/"
   },
   "dependencies": {
-    "@toast-ui/editor": "^3.2.2",
+    "@simplewebauthn/browser": "^13.1.2",
+    "@toast-ui/editor": "^3.1.0",
     "@vueuse/head": "^2.0.0",
     "axios": "^1.10.0",
     "dompurify": "^3.2.6",
     "html2canvas": "^1.4.1",
+    "marked": "^16.1.1",
     "pinia": "^3.0.3",
     "qrcode": "^1.5.4",
     "swiper": "^11.2.10",
