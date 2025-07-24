@@ -5,6 +5,7 @@
         <div class="flex space-x-4">
           <RouterLink to="/terms" class="hover:underline">服務條款</RouterLink>
           <RouterLink to="/privacy" class="hover:underline">隱私權政策</RouterLink>
+          <button swg-standard-button="contribution"></button>
         </div>
       </div>
     </footer>

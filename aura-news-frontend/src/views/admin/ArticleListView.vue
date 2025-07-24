@@ -14,7 +14,7 @@ const fetchArticles = async (url = '/api/admin/articles') => {
   try {
     const response = await axios.get(url);
     articles.value = response.data.data;
-    pagination.value = response.data; // 直接存整個 response
+    pagination.value = response.data;
   } catch (err) {
     console.error("文章列表載入失敗:", err);
     error.value = '無法載入文章列表。';

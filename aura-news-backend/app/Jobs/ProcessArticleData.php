@@ -273,8 +273,8 @@ class ProcessArticleData implements ShouldQueue
             }
 
             $plainText = trim(strip_tags($cleanContent));
-            if (mb_strlen($plainText) < 500) {
-                \Log::warning('主文少於500字，略過 AI 任務，article ID: ' . $this->article->id);
+            if (mb_strlen($plainText) < 100) {
+                \Log::warning('主文少於100字，略過 AI 任務，article ID: ' . $this->article->id);
                 return;
             }
             
@@ -305,8 +305,45 @@ class ProcessArticleData implements ShouldQueue
                 if (strpos($answer, '不相關') !== false) $isRelated = false;
             } catch (\Exception $e) { $isRelated = true; }
             if (!$isRelated) {
-                \Log::warning('標題與內文不相關，略過: ' . $this->article->title);
-                return;
+                \Log::warning('標題與內文不相關，AI 先生成內文再生成標題: ' . $this->article->title);
+                try {
+                    $gemini = resolve(GeminiClient::class);
+                    // 先用AI生成內文
+                    $contentPrompt = "請根據以下新聞標題與原始描述，撰寫一篇約 500 字的完整新聞內容，並以 Markdown 格式輸出，請使用繁體中文。請將主體內容包在 <!--start--> 和 <!--end--> 標記之間：\n\n標題：{$this->article->title}\n\n原始描述：" . strip_tags($this->article->content);
+                    $contentResult = $gemini->generativeModel('gemini-2.5-flash-lite-preview-06-17')->generateContent($contentPrompt);
+                    $markdownContent = $contentResult->text();
+                    if (preg_match('/<!--start-->(.*?)<!--end-->/s', $markdownContent, $matches)) {
+                        $markdownContent = trim($matches[1]);
+                    }
+                    // 檢查是否為付費內容
+                    $paidKeywords = ['ONLY AVAILABLE IN PAID PLANS', 'PAID PLANS', 'PREMIUM CONTENT', 'SUBSCRIBE TO READ', 'PAY TO READ', 'MEMBERS ONLY'];
+                    foreach ($paidKeywords as $kw) {
+                        if (stripos($markdownContent, $kw) !== false) {
+                            \Log::warning('AI 生成內文為付費內容，略過: ' . $this->article->title);
+                            return;
+                        }
+                    }
+                    // 再用AI根據新內文生成標題
+                    $titlePrompt = "請根據以下新聞內文，為其生成一個貼切且具體的繁體中文新聞標題，僅回傳標題本身：\n\n" . strip_tags($markdownContent);
+                    $titleResult = $gemini->generativeModel('gemini-2.5-flash-lite-preview-06-17')->generateContent($titlePrompt);
+                    $newTitle = trim($titleResult->text());
+                    if ($newTitle) {
+                        $this->article->title = $newTitle;
+                        \Log::info('AI 生成新標題: ' . $newTitle);
+                    }
+                    $this->article->content = $markdownContent;
+                } catch (\Exception $e) {
+                    \Log::error('AI 生成新標題/內文失敗: ' . $e->getMessage());
+                    return;
+                }
+            }
+            // 檢查是否為付費內容
+            $paidKeywords = ['ONLY AVAILABLE IN PAID PLANS', 'PAID PLANS', 'PREMIUM CONTENT', 'SUBSCRIBE TO READ', 'PAY TO READ', 'MEMBERS ONLY'];
+            foreach ($paidKeywords as $kw) {
+                if (stripos($this->article->content, $kw) !== false) {
+                    \Log::warning('內文為付費內容，略過: ' . $this->article->title);
+                    return;
+                }
             }
 
             $gemini = resolve(GeminiClient::class);
@@ -317,7 +354,8 @@ class ProcessArticleData implements ShouldQueue
             if (preg_match('/<!--start-->(.*?)<!--end-->/s', $markdownContent, $matches)) {
                 $markdownContent = trim($matches[1]);
             }
-            $this->article->content = $markdownContent;
+            // 寫入前先清理第一句包含「好的」的句子
+            $this->article->content = Article::cleanFirstSentence($markdownContent);
 
             try {
                 $gemini = resolve(GeminiClient::class);

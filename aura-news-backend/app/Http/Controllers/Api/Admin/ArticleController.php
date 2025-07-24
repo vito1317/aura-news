@@ -38,6 +38,8 @@ class ArticleController extends Controller
             'keywords' => 'nullable|string',
         ]);
 
+        // 寫入前先清理第一句包含「好的」的句子
+        $validatedData['content'] = \App\Models\Article::cleanFirstSentence($validatedData['content']);
         $article = Article::create(array_merge($validatedData, [
             'source_url' => $validatedData['source_url'] ?? null,
             'author' => 'Admin',
@@ -65,6 +67,8 @@ class ArticleController extends Controller
             'category_id' => 'required|exists:categories,id',
             'keywords' => 'nullable|string',
         ]);
+        // 寫入前先清理第一句包含「好的」的句子
+        $validatedData['content'] = \App\Models\Article::cleanFirstSentence($validatedData['content']);
         $article->update($validatedData);
         return response()->json($article);
     }
@@ -307,9 +311,9 @@ class ArticleController extends Controller
             return response()->json(['message' => '主文擷取失敗: ' . $e->getMessage()], 422);
         }
         $plainText = trim(strip_tags($cleanContent));
-        // 新增：過濾主文少於500字的文章
-        if (mb_strlen($plainText) < 500) {
-            return response()->json(['message' => '主文內容過短（少於500字），無法產生新聞稿'], 422);
+        // 過濾主文少於100字的文章
+        if (mb_strlen($plainText) < 100) {
+            return response()->json(['message' => '主文內容過短（少於100字），無法產生新聞稿'], 422);
         }
         // 主文最後加上原文出處
         $sourceUrl = $request->input('source_url') ?? $url;
@@ -342,6 +346,43 @@ class ArticleController extends Controller
             $keywords = trim(str_replace(["\n", "。", "，"], [',', '', ','], $result->text()));
         } catch (\Exception $e) {
             $keywords = null;
+        }
+        // 檢查標題與內文相關性，不相關則用 AI 生成新標題
+        try {
+            $gemini = resolve(\Gemini\Client::class);
+            $prompt = "請判斷以下新聞標題與內文是否相關，僅回傳「相關」或「不相關」：\n\n標題：{$title}\n\n內文：" . strip_tags($markdownContent);
+            $result = $gemini->generativeModel('gemini-2.5-flash-lite-preview-06-17')->generateContent($prompt);
+            $answer = trim($result->text());
+            if (strpos($answer, '不相關') !== false) {
+                // 先用AI生成內文
+                $contentPrompt = "請根據以下新聞標題與原始描述，撰寫一篇約 500 字的完整新聞內容，並以 Markdown 格式輸出，請使用繁體中文。請將主體內容包在 <!--start--> 和 <!--end--> 標記之間：\n\n標題：{$title}\n\n原始描述：" . strip_tags($markdownContent);
+                $contentResult = $gemini->generativeModel('gemini-2.5-flash-lite-preview-06-17')->generateContent($contentPrompt);
+                $markdownContent = $contentResult->text();
+                if (preg_match('/<!--start-->(.*?)<!--end-->/s', $markdownContent, $matches)) {
+                    $markdownContent = trim($matches[1]);
+                }
+                // 檢查是否為付費內容
+                $paidKeywords = ['ONLY AVAILABLE IN PAID PLANS', 'PAID PLANS', 'PREMIUM CONTENT', 'SUBSCRIBE TO READ', 'PAY TO READ', 'MEMBERS ONLY'];
+                foreach ($paidKeywords as $kw) {
+                    if (stripos($markdownContent, $kw) !== false) {
+                        return response()->json(['message' => '主文內容為付費內容，無法產生新聞稿'], 422);
+                    }
+                }
+                // 再用AI根據新內文生成標題
+                $titlePrompt = "請根據以下新聞內文，為其生成一個貼切且具體的繁體中文新聞標題，僅回傳標題本身：\n\n" . strip_tags($markdownContent);
+                $titleResult = $gemini->generativeModel('gemini-2.5-flash-lite-preview-06-17')->generateContent($titlePrompt);
+                $newTitle = trim($titleResult->text());
+                if ($newTitle) {
+                    $title = $newTitle;
+                }
+            }
+        } catch (\Exception $e) {}
+        // 檢查是否為付費內容
+        $paidKeywords = ['ONLY AVAILABLE IN PAID PLANS', 'PAID PLANS', 'PREMIUM CONTENT', 'SUBSCRIBE TO READ', 'PAY TO READ', 'MEMBERS ONLY'];
+        foreach ($paidKeywords as $kw) {
+            if (stripos($markdownContent, $kw) !== false) {
+                return response()->json(['message' => '主文內容為付費內容，無法產生新聞稿'], 422);
+            }
         }
         return response()->json([
             'title' => $title,

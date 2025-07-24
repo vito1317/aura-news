@@ -155,7 +155,7 @@ const latestArticles = computed(() => {
   return articles.value;
 });
 
-const popularArticles = ref([]); // 預設空陣列
+const popularArticles = ref([]);
 const recommendedArticles = ref([]);
 const latestArticlesForHero = ref([]);
 const popularArticlesForHero = ref([]);

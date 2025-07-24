@@ -238,9 +238,9 @@ class FetchNewsCommand extends Command
                 $keywords = null;
             }
 
-            // 新增：過濾主文少於500字的文章
-            if (mb_strlen(strip_tags($content)) < 500) {
-                $this->warn('主文少於500字，略過: ' . $fetchedArticle['title']);
+            // 新增：過濾主文少於100字的文章
+            if (mb_strlen(strip_tags($content)) < 100) {
+                $this->warn('主文少於100字，略過: ' . $fetchedArticle['title']);
                 continue;
             }
 
@@ -254,14 +254,62 @@ class FetchNewsCommand extends Command
                 if (strpos($answer, '不相關') !== false) $isRelated = false;
             } catch (\Exception $e) { $isRelated = true; }
             if (!$isRelated) {
-                $this->warn('標題與內文不相關，略過: ' . $fetchedArticle['title']);
+                $this->warn('標題與內文不相關，AI 先生成內文再生成標題: ' . $fetchedArticle['title']);
+                try {
+                    $gemini = resolve(\Gemini\Client::class);
+                    // 先用AI生成內文
+                    $contentPrompt = "請根據以下新聞標題與原始描述，撰寫一篇約 500 字的完整新聞內容，並以 Markdown 格式輸出，請使用繁體中文。請將主體內容包在 <!--start--> 和 <!--end--> 標記之間：\n\n標題：{$fetchedArticle['title']}\n\n原始描述：" . strip_tags($content);
+                    $contentResult = $gemini->generativeModel('gemini-2.5-flash-lite-preview-06-17')->generateContent($contentPrompt);
+                    $markdownContent = $contentResult->text();
+                    if (preg_match('/<!--start-->(.*?)<!--end-->/s', $markdownContent, $matches)) {
+                        $markdownContent = trim($matches[1]);
+                    }
+                    // 檢查是否為付費內容
+                    $paidKeywords = ['ONLY AVAILABLE IN PAID PLANS', 'PAID PLANS', 'PREMIUM CONTENT', 'SUBSCRIBE TO READ', 'PAY TO READ', 'MEMBERS ONLY'];
+                    $skip = false;
+                    foreach ($paidKeywords as $kw) {
+                        if (stripos($markdownContent, $kw) !== false) {
+                            $skip = true;
+                            break;
+                        }
+                    }
+                    if ($skip) {
+                        $this->warn('AI 生成內文為付費內容，略過: ' . $fetchedArticle['title']);
+                        continue;
+                    }
+                    // 再用AI根據新內文生成標題
+                    $titlePrompt = "請根據以下新聞內文，為其生成一個貼切且具體的繁體中文新聞標題，僅回傳標題本身：\n\n" . strip_tags($markdownContent);
+                    $titleResult = $gemini->generativeModel('gemini-2.5-flash-lite-preview-06-17')->generateContent($titlePrompt);
+                    $newTitle = trim($titleResult->text());
+                    if ($newTitle) {
+                        $fetchedArticle['title'] = $newTitle;
+                        $this->info('AI 生成新標題: ' . $newTitle);
+                    }
+                    $content = $markdownContent;
+                } catch (\Exception $e) {
+                    $this->error('AI 生成新標題/內文失敗: ' . $e->getMessage());
+                    continue;
+                }
+            }
+            // 檢查是否為付費內容
+            $paidKeywords = ['ONLY AVAILABLE IN PAID PLANS', 'PAID PLANS', 'PREMIUM CONTENT', 'SUBSCRIBE TO READ', 'PAY TO READ', 'MEMBERS ONLY'];
+            $skip = false;
+            foreach ($paidKeywords as $kw) {
+                if (stripos($content, $kw) !== false) {
+                    $skip = true;
+                    break;
+                }
+            }
+            if ($skip) {
+                $this->warn('內文為付費內容，略過: ' . $fetchedArticle['title']);
                 continue;
             }
 
+            // 寫入前先清理第一句包含「好的」的句子
             $article = Article::create([
                 'source_url' => $fetchedArticle['url'],
                 'title' => $fetchedArticle['title'],
-                'content' => $content,
+                'content' => Article::cleanFirstSentence($content),
                 'image_url' => $fetchedArticle['urlToImage'],
                 'summary' => $fetchedArticle['description'] ?? null,
                 'category_id' => $category->id,
@@ -308,10 +356,11 @@ class FetchNewsCommand extends Command
             $this->line("正在建立: " . $articleData['title']);
             
             try {
+                // 寫入前先清理第一句包含「好的」的句子
                 $article = Article::create([
                     'source_url' => $articleData['source_url'],
                     'title' => $articleData['title'],
-                    'content' => $articleData['content'],
+                    'content' => Article::cleanFirstSentence($articleData['content']),
                     'image_url' => $articleData['image_url'],
                     'summary' => $articleData['summary'],
                     'category_id' => $category->id,

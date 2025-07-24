@@ -13,6 +13,22 @@ class PruneArticlesWithoutSummaryCommand extends Command
 
     public function handle()
     {
+        // 1. 批次移除所有內文第一句話包含「好的」的整句詞語（新版，適用所有文章）
+        $this->info('開始批次移除所有內文第一句話包含「好的」的句子...');
+        $articles = Article::all();
+        $countUpdated = 0;
+        foreach ($articles as $article) {
+            $original = $article->content;
+            $cleaned = Article::cleanFirstSentence($original);
+            if ($original !== $cleaned) {
+                $article->content = $cleaned;
+                $article->save();
+                $this->line("已移除文章 ID: {$article->id} 的第一句話");
+                $countUpdated++;
+            }
+        }
+        $this->info("共移除 {$countUpdated} 篇文章的第一句話。");
+
         $this->info('開始檢查並清理無摘要、未分析、可信度為0%或異常內容的文章...');
 
         $articlesToDelete = Article::where(function($q) {

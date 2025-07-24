@@ -25,5 +25,8 @@
       <h2>六、聯絡我們</h2>
       <p>如有任何疑問，請來信 <a href="mailto:service@vito1317.com">service@vito1317.com</a>。</p>
     </div>
+    <div class="mt-8 text-xs text-gray-500 bg-yellow-50 border-l-4 border-yellow-400 rounded p-4">
+      本平台部分內容由 AI 自動生成，僅供參考，請用戶自行判斷資訊真偽與適用性，勿全然依賴 AI 結果做出重大決策。
+    </div>
   </div>
 </template> 

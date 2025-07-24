@@ -24,7 +24,7 @@ const form = ref({
   image_url: null,
   category_id: null,
   keywords: '',
-  source_url: '', // 新增原文出處欄位
+  source_url: '',
 });
 
 const categories = ref([]);

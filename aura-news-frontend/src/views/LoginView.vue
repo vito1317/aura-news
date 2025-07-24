@@ -45,7 +45,6 @@ const handleRegister = async () => {
   }
 };
 
-// Google OAuth 整合
 const handleGoogleLogin = async () => {
   error.value = null;
   try {
@@ -56,25 +55,20 @@ const handleGoogleLogin = async () => {
   }
 };
 
-// Passkey 註冊
 const handlePasskeyRegister = async () => {
   console.log('Passkey register clicked!');
   error.value = null;
   try {
-    // 1. 檢查 email 是否已註冊過 Passkey
     const check = await axios.get(`/api/passkey/check?email=${encodeURIComponent(form.value.email)}`);
     if (check.data.exists) {
       error.value = '此帳號已註冊過 Passkey，請至用戶設定綁定新 Passkey';
       return;
     }
-    // 2. 從後端取得註冊 options
     const { data: options } = await axios.post('/api/passkey/register/options', {
       email: form.value.email,
       name: form.value.nickname || form.value.email
     });
-    // 3. 呼叫 WebAuthn API
     const attResp = await startRegistration(options);
-    // 4. 傳送 attestation 給後端
     const { data: result } = await axios.post('/api/passkey/register/verify', {
       credential: attResp,
       email: form.value.email
@@ -99,11 +93,9 @@ const handlePasskeyRegister = async () => {
   }
 };
 
-// Passkey 登入
 const handlePasskeyLogin = async () => {
   error.value = null;
   try {
-    // 不傳 email
     const { data: options } = await axios.post('/api/passkey/login/options', {});
     const assertionResp = await startAuthentication(options);
     const { data: result } = await axios.post('/api/passkey/login/verify', {
@@ -118,13 +110,11 @@ const handlePasskeyLogin = async () => {
   }
 };
 
-// callback 處理
 onMounted(async () => {
   const code = route.query.code;
   if (code) {
     error.value = null;
     try {
-      // 直接呼叫 callback 取得 token
       const res = await axios.get('/api/auth/google/callback', { params: { code } });
       axios.defaults.headers.common['Authorization'] = `Bearer ${res.data.token}`;
       localStorage.setItem('token', res.data.token);

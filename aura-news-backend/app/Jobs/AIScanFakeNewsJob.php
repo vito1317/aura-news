@@ -735,10 +735,34 @@ class AIScanFakeNewsJob implements ShouldQueue
 
         // 新增：AI 摘要每個外部網站內容
         $externalSummaries = [];
-        $gemini = resolve(GeminiClient::class);
         foreach ($externalUrls as $url) {
             try {
-                $summaryPrompt = "請摘要這個網頁的主要內容（繁體中文，200字內）：" . $url;
+                // 1. 爬蟲抓主文
+                $guzzle = new \GuzzleHttp\Client(['timeout' => 15, 'verify' => false]);
+                $response = $guzzle->get($url, [
+                    'headers' => [
+                        'User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+                    ],
+                ]);
+                $html = (string) $response->getBody();
+                $doc = new \DOMDocument();
+                @$doc->loadHTML('<?xml encoding="utf-8" ?>' . $html);
+                $xpath = new \DOMXPath($doc);
+                $contentNode = $xpath->query(
+                    '//article | //*[contains(@class, "article-content")] | //*[contains(@class, "post-body")] | //*[contains(@class, "entry-content")] | //*[contains(@class, "caas-body")] | //*[contains(@class, "main-content")] | //*[contains(@class, "article-body")] | //*[contains(@id, "paragraph")] | //*[contains(@class, "content")] | //*[contains(@class, "post_content")]'
+                )->item(0);
+                $mainText = '';
+                if ($contentNode) {
+                    $mainText = trim(strip_tags($doc->saveHTML($contentNode)));
+                } else {
+                    $mainText = trim(strip_tags($html));
+                }
+                // 2. AI 摘要主文
+                if (mb_strlen($mainText) > 20) {
+                    $summaryPrompt = "請摘要這個網頁的主要內容（繁體中文，200字內）：\n" . mb_substr($mainText, 0, 3000);
+                } else {
+                    $summaryPrompt = "請摘要這個網頁的主要內容（繁體中文，200字內）：\n" . $url;
+                }
                 $summaryResult = $gemini->generativeModel('gemini-2.5-flash-lite-preview-06-17')->generateContent($summaryPrompt);
                 $externalSummaries[$url] = trim($summaryResult->text());
             } catch (\Exception $e) {

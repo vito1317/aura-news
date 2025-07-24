@@ -656,6 +656,13 @@ function searchByKeyword(kw) {
           class="prose prose-lg max-w-none prose-h2:font-bold prose-h2:text-gray-800" 
           v-html="safeContent">
         </div>
+        <!-- AI Disclaimer Start -->
+        <div class="mt-6 mb-6 p-4 bg-yellow-100 border-l-4 border-yellow-500 text-yellow-900 rounded text-sm font-semibold">
+          ⚠️ 本頁內容均由AI生成，請讀者自行判斷消息真偽，勿全然相信，重要資訊請多方查證。
+        </div>
+        <!-- AI Disclaimer End -->
+        <button swg-standard-button="contribution"></button>
+        
         <div v-if="article.source_url" class="mt-4 text-sm text-gray-500">
           <span>原文出處：</span>
           <a :href="article.source_url" target="_blank" rel="noopener noreferrer" class="text-blue-600 underline break-all hover:text-blue-800">{{ article.source_url }}</a>
