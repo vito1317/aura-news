@@ -273,7 +273,6 @@ class ProcessArticleData implements ShouldQueue
             }
 
             $plainText = trim(strip_tags($cleanContent));
-            // 新增：過濾主文少於500字的文章
             if (mb_strlen($plainText) < 500) {
                 \Log::warning('主文少於500字，略過 AI 任務，article ID: ' . $this->article->id);
                 return;
@@ -283,7 +282,6 @@ class ProcessArticleData implements ShouldQueue
                 'length' => mb_strlen($plainText),
                 'sample' => mb_substr($plainText, 0, 200)
             ]);
-            // 檢查是否為付費內容
             if (stripos($plainText, 'ONLY AVAILABLE IN PAID PLANS') !== false || 
                 stripos($plainText, 'PAID PLANS') !== false ||
                 stripos($plainText, 'PREMIUM CONTENT') !== false ||
@@ -293,13 +291,11 @@ class ProcessArticleData implements ShouldQueue
                 \Log::warning('跳過付費內容文章，article ID: ' . $this->article->id . ', URL: ' . $this->article->source_url);
                 return;
             }
-            // 放寬內容長度判斷
             if (mb_strlen($plainText) < 80) {
                 \Log::warning('文章全文過短，略過 AI 生成，article ID: ' . $this->article->id);
                 return;
             }
 
-            // 檢查標題與內文相關性
             $isRelated = true;
             try {
                 $gemini = resolve(GeminiClient::class);
@@ -323,7 +319,6 @@ class ProcessArticleData implements ShouldQueue
             }
             $this->article->content = $markdownContent;
 
-            // 產生關鍵字
             try {
                 $gemini = resolve(GeminiClient::class);
                 $prompt = "請根據以下新聞內容，產生3~5個適合用於分類與推薦的繁體中文關鍵字或短語，僅回傳關鍵字本身，用逗號分隔：\n\n" . strip_tags($this->article->content);
@@ -331,14 +326,13 @@ class ProcessArticleData implements ShouldQueue
                 $keywords = trim(str_replace(["\n", "。", "，"], [',', '', ','], $result->text()));
                 $this->article->keywords = $keywords;
             } catch (\Exception $e) {
-                // do nothing
+                \Log::error('AI 產生關鍵字失敗: ' . $e->getMessage());
             }
 
             $prompt = "請將以下新聞內容，整理成一段約 150 字的精簡摘要，請使用繁體中文：\n\n" . strip_tags($this->article->content);
             $result = $gemini->generativeModel('gemini-2.5-flash-lite-preview-06-17')->generateContent($prompt);
             $this->article->summary = $result->text();
 
-            // 自動進行 AI 可信度掃描
             $this->performAutoCredibilityScan();
 
             if ($this->article->isDirty()) {
@@ -350,9 +344,6 @@ class ProcessArticleData implements ShouldQueue
         }
     }
 
-    /**
-     * 自動進行可信度掃描
-     */
     private function performAutoCredibilityScan(): void
     {
         try {
@@ -366,7 +357,6 @@ class ProcessArticleData implements ShouldQueue
 
             $gemini = resolve(GeminiClient::class);
             
-            // 1. AI 產生查證關鍵字
             $plainTextMarked = "【主文開始】\n" . $plainText . "\n【主文結束】";
             $promptKeyword = "請根據以下新聞內容（主文已用【主文開始】與【主文結束】標記），產生3~5個適合用於查證的繁體中文關鍵字或短語，僅回傳關鍵字本身，用逗號分隔：\n\n" . $plainTextMarked;
             $resultKeyword = $gemini->generativeModel('gemini-2.5-flash-lite-preview-06-17')->generateContent($promptKeyword);
@@ -375,19 +365,16 @@ class ProcessArticleData implements ShouldQueue
             $keywordsArr = array_filter(array_map('trim', explode(',', $keywords)));
             $searchKeyword = implode(' ', array_slice($keywordsArr, 0, 5));
 
-            // 2. 搜尋相關新聞資料
             $searchText = '';
             
-            // 站內新聞搜尋
             $articles = Article::search($searchKeyword)->take(3)->get();
             foreach ($articles as $idx => $article) {
-                if ($article->id === $this->article->id) continue; // 排除自己
+                if ($article->id === $this->article->id) continue;
                 $searchText .= ($idx+1) . ". [站內] 標題：" . $article->title . "\n";
                 $searchText .= "摘要：" . ($article->summary ?: mb_substr(strip_tags($article->content),0,100)) . "\n";
                 $searchText .= "來源：" . ($article->source_url ?? '') . "\n---\n";
             }
 
-            // NewsAPI 全網新聞搜尋
             $newsApiKey = env('NEWS_API_KEY');
             if ($newsApiKey) {
                 try {
@@ -418,7 +405,6 @@ class ProcessArticleData implements ShouldQueue
                 }
             }
 
-            // NewsData API 全網新聞搜尋
             $newsDataApiKey = env('NEWSDATA_API_KEY');
             if ($newsDataApiKey) {
                 try {
@@ -440,7 +426,6 @@ class ProcessArticleData implements ShouldQueue
                 }
             }
 
-            // Google Custom Search
             try {
                 $client = new \GuzzleHttp\Client();
                 $response = $client->get('https://www.googleapis.com/customsearch/v1', [
@@ -474,16 +459,13 @@ class ProcessArticleData implements ShouldQueue
                 $searchText = '（查無相關新聞）';
             }
 
-            // 3. AI 綜合查證
             $nowTime = now()->setTimezone('Asia/Taipei')->format('Y-m-d H:i');
             $prompt = "請參考下列新聞資料，針對用戶輸入的內容（主文已用【主文開始】與【主文結束】標記）進行查證，並以繁體中文簡要說明查證過程與理由，最後請獨立一行以【可信度：xx%】格式標示可信度，再給出建議。請將主文原文用【主文開始】與【主文結束】標記包住。所有網址連結結束處請加上一個空格。請在回應最後以**【查證出處】**區塊列出所有引用的網站、新聞來源或資料連結。\n\n【查證時間：{$nowTime}】\n\n【新聞資料】\n" . $searchText . "\n【用戶輸入】\n" . $plainTextMarked . "\n\n---\n資料來源：" . $this->article->source_url . "\n查證關鍵字：" . $searchKeyword;
             $result = $gemini->generativeModel('gemini-2.5-flash-lite-preview-06-17')->generateContent($prompt);
             $aiText = $result->text();
 
-            // 提取可信度百分比
             $credibilityScore = $this->extractCredibilityScore($aiText);
             
-            // 儲存可信度分析結果
             $this->article->credibility_analysis = $aiText;
             $this->article->credibility_score = $credibilityScore;
             $this->article->credibility_checked_at = now();
@@ -501,9 +483,6 @@ class ProcessArticleData implements ShouldQueue
         }
     }
 
-    /**
-     * 從 AI 回應中提取可信度百分比
-     */
     private function extractCredibilityScore(string $aiText): ?int
     {
         if (preg_match('/【可信度：(\d+)%】/', $aiText, $matches)) {
@@ -511,4 +490,4 @@ class ProcessArticleData implements ShouldQueue
         }
         return null;
     }
-}
+    }
