@@ -306,6 +306,8 @@ class FetchNewsCommand extends Command
             }
 
             // 寫入前先清理第一句包含「好的」的句子
+            $popularity = isset($fetchedArticle['popularity_score']) ? floatval($fetchedArticle['popularity_score']) : 0;
+            $viewCount = intval($popularity * 20);
             $article = Article::create([
                 'source_url' => $fetchedArticle['url'],
                 'title' => $fetchedArticle['title'],

@@ -3,12 +3,43 @@ import { fileURLToPath, URL } from 'node:url'
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import vueDevTools from 'vite-plugin-vue-devtools'
+import { VitePWA } from 'vite-plugin-pwa'
 
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [
     vue(),
     vueDevTools(),
+    VitePWA({
+      registerType: 'autoUpdate',
+      manifest: {
+        name: 'Aura News',
+        short_name: 'AuraNews',
+        description: 'Aura News - Ai智能摘要新聞平台|新聞可信度與熱門度平台',
+        theme_color: '#2563eb',
+        background_color: '#ffffff',
+        display: 'standalone',
+        start_url: '/',
+        icons: [
+          {
+            src: '/aura-news.png',
+            sizes: '192x192',
+            type: 'image/png',
+          },
+          {
+            src: '/aura-news.png',
+            sizes: '512x512',
+            type: 'image/png',
+          }
+        ]
+      },
+      workbox: {
+        globPatterns: ['**/*.{js,css,html,png,svg,ico}'],
+      },
+      devOptions: {
+        enabled: true
+      }
+    })
   ],
   base: '/',
   resolve: {

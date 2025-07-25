@@ -40,12 +40,32 @@ class ArticleController extends Controller
 
         // 寫入前先清理第一句包含「好的」的句子
         $validatedData['content'] = \App\Models\Article::cleanFirstSentence($validatedData['content']);
+        $popularity = $validatedData['popularity_score'] ?? 0;
+        $viewCount = intval($popularity * 20);
         $article = Article::create(array_merge($validatedData, [
             'source_url' => $validatedData['source_url'] ?? null,
             'author' => 'Admin',
             'published_at' => now(),
             'keywords' => $validatedData['keywords'] ?? null,
+            'view_count' => $viewCount,
         ]));
+
+        // 自動進行可信度掃描（略過內容類型偵測）
+        try {
+            $content = $article->content;
+            $taskId = 'admin_store_' . $article->id . '_' . uniqid();
+            $clientIp = request()->ip() ?? '127.0.0.1';
+            // 直接呼叫可信度分析主流程（略過內容類型偵測）
+            $credibilityResult = $this->runCredibilityScan($content, $taskId, $clientIp);
+            if ($credibilityResult) {
+                $article->credibility_analysis = $credibilityResult['analysis_result'];
+                $article->credibility_score = $credibilityResult['credibility_score'];
+                $article->credibility_checked_at = now();
+                $article->save();
+            }
+        } catch (\Exception $e) {
+            \Log::error('自動可信度掃描失敗', ['error' => $e->getMessage()]);
+        }
 
         return response()->json($article, 201);
     }
@@ -393,5 +413,202 @@ class ArticleController extends Controller
             'source_url' => $url, // 回傳原始網址
             'keywords' => $keywords,
         ]);
+    }
+
+    /**
+     * 直接呼叫 AIScanFakeNewsJob 可信度分析主流程，略過內容類型偵測
+     */
+    private function runCredibilityScan($content, $taskId, $clientIp)
+    {
+        // 直接複製 AIScanFakeNewsJob 可信度分析主流程（略過內容類型偵測）
+        $gemini = resolve(\Gemini\Client::class);
+        $nowTime = now()->setTimezone('Asia/Taipei')->format('Y-m-d H:i');
+        $plainTextMarked = "【主文開始】\n" . $content . "\n【主文結束】";
+        $searchText = '';
+        $searchKeyword = '';
+        // 產生查證關鍵字
+        try {
+            $promptKeyword = "你是一個新聞查證專家。請分析以下新聞內容，提取3-5個最重要的關鍵字用於查證。\n\n請嚴格按照以下 JSON 格式回覆，不要添加任何其他文字：\n\n{\n  \"keywords\": [\"關鍵字1\", \"關鍵字2\", \"關鍵字3\", \"關鍵字4\", \"關鍵字5\"],\n  \"search_phrase\": \"關鍵字1 關鍵字2 關鍵字3\"\n}\n\n要求：\n- 關鍵字應該是名詞、人名、地名、事件名稱等具體實體\n- 搜尋短語是關鍵字的組合，用於搜尋相關新聞\n- 所有關鍵字必須是繁體中文\n\n新聞內容：\n" . $plainTextMarked;
+            $resultKeyword = $gemini->generativeModel('gemini-2.5-flash-lite-preview-06-17')->generateContent($promptKeyword);
+            $keywordResponse = trim($resultKeyword->text());
+            $keywordData = null;
+            if (preg_match('/\{.*\}/s', $keywordResponse, $matches)) {
+                $jsonStr = $matches[0];
+                $keywordData = json_decode($jsonStr, true);
+            }
+            if (!$keywordData || !isset($keywordData['keywords'])) {
+                $keywords = trim(str_replace(["\n", "。", "，"], [',', '', ','], $keywordResponse));
+                $keywordsArr = array_filter(array_map('trim', explode(',', $keywords)));
+                $searchKeyword = implode(' ', array_slice($keywordsArr, 0, 5));
+            } else {
+                $searchKeyword = $keywordData['search_phrase'] ?? implode(' ', $keywordData['keywords']);
+            }
+        } catch (\Exception $e) {
+            $searchKeyword = '';
+        }
+        // 站內新聞搜尋
+        $articles = \App\Models\Article::search($searchKeyword)->take(3)->get();
+        $externalUrls = [];
+        foreach ($articles as $idx => $article) {
+            $searchText .= ($idx+1) . ". [站內] 標題：" . $article->title . "\n";
+            $searchText .= "摘要：" . ($article->summary ?: mb_substr(strip_tags($article->content),0,100)) . "\n";
+            $searchText .= "來源：" . ($article->source_url ?? '') . "\n---\n";
+        }
+        // 外部新聞查證
+        $newsApiKey = env('NEWS_API_KEY');
+        if ($newsApiKey) {
+            try {
+                $newsResponse = (new \GuzzleHttp\Client())->get('https://newsapi.org/v2/everything', [
+                    'query' => [
+                        'q' => $searchKeyword,
+                        'language' => 'zh',
+                        'sortBy' => 'publishedAt',
+                        'apiKey' => $newsApiKey,
+                        'pageSize' => 3,
+                    ],
+                    'timeout' => 10,
+                    'verify' => false,
+                ]);
+                $newsData = json_decode($newsResponse->getBody(), true);
+                if (!empty($newsData['articles'])) {
+                    foreach ($newsData['articles'] as $idx => $article) {
+                        $searchText .= ($idx+1) . ". [NewsAPI] 標題：" . $article['title'] . "\n";
+                        $searchText .= "摘要：" . ($article['description'] ?? '') . "\n";
+                        $searchText .= "來源：" . ($article['url'] ?? '') . "\n---\n";
+                        if (!empty($article['url'])) {
+                            $externalUrls[] = $article['url'];
+                        }
+                    }
+                }
+            } catch (\Exception $e) {
+                \Log::error('NewsAPI 查詢失敗', [
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+        $newsDataApiKey = env('NEWSDATA_API_KEY');
+        if ($newsDataApiKey) {
+            try {
+                $newsDataService = new \App\Services\NewsDataApiService();
+                $newsDataArticles = $newsDataService->searchArticles($searchKeyword, 'zh', 3);
+                if ($newsDataArticles && $newsDataArticles->count() > 0) {
+                    foreach ($newsDataArticles as $idx => $article) {
+                        $searchText .= ($idx+1) . ". [NewsData] 標題：" . $article['title'] . "\n";
+                        $searchText .= "摘要：" . ($article['summary'] ?? '') . "\n";
+                        $searchText .= "來源：" . ($article['source_url'] ?? '') . "\n---\n";
+                        if (!empty($article['source_url'])) {
+                            $externalUrls[] = $article['source_url'];
+                        }
+                    }
+                }
+            } catch (\Exception $e) {
+                \Log::error('NewsData API 查詢失敗', [
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+        try {
+            $client = new \GuzzleHttp\Client();
+            $response = $client->get('https://www.googleapis.com/customsearch/v1', [
+                'query' => [
+                    'key' => config('googlesearchapi.google_search_api_key'),
+                    'cx' => config('googlesearchapi.google_search_engine_id'),
+                    'q' => $searchKeyword,
+                    'num' => 3,
+                    'lr' => 'lang_zh-TW',
+                    'safe' => 'off',
+                ],
+                'timeout' => 10,
+                'verify' => false,
+            ]);
+            $googleData = json_decode($response->getBody(), true);
+            if (!empty($googleData['items'])) {
+                foreach ($googleData['items'] as $idx => $item) {
+                    $searchText .= ($idx+1) . ". [Google] 標題：" . $item['title'] . "\n";
+                    $searchText .= "摘要：" . ($item['snippet'] ?? '') . "\n";
+                    $searchText .= "來源：" . ($item['link'] ?? '') . " \n---\n";
+                    if (!empty($item['link'])) {
+                        $externalUrls[] = $item['link'];
+                    }
+                }
+            }
+        } catch (\Exception $e) {
+            \Log::error('Google Search API 查詢失敗', [
+                'error' => $e->getMessage(),
+            ]);
+        }
+        // AI 摘要每個外部網站內容
+        $externalSummaries = [];
+        foreach ($externalUrls as $url) {
+            try {
+                $guzzle = new \GuzzleHttp\Client(['timeout' => 15, 'verify' => false]);
+                $response = $guzzle->get($url, [
+                    'headers' => [
+                        'User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+                    ],
+                ]);
+                $html = (string) $response->getBody();
+                $doc = new \DOMDocument();
+                @$doc->loadHTML('<?xml encoding="utf-8" ?>' . $html);
+                $xpath = new \DOMXPath($doc);
+                $contentNode = $xpath->query(
+                    '//article | //*[contains(@class, "article-content")] | //*[contains(@class, "post-body")] | //*[contains(@class, "entry-content")] | //*[contains(@class, "caas-body")] | //*[contains(@class, "main-content")] | //*[contains(@class, "article-body")] | //*[contains(@id, "paragraph")] | //*[contains(@class, "content")] | //*[contains(@class, "post_content")]'
+                )->item(0);
+                $mainText = '';
+                if ($contentNode) {
+                    $mainText = trim(strip_tags($doc->saveHTML($contentNode)));
+                } else {
+                    $mainText = trim(strip_tags($html));
+                }
+                // 2. AI 摘要主文
+                if (mb_strlen($mainText) > 20) {
+                    $summaryPrompt = "請摘要這個網頁的主要內容（繁體中文，200字內）：\n" . mb_substr($mainText, 0, 3000);
+                } else {
+                    $summaryPrompt = "請摘要這個網頁的主要內容（繁體中文，200字內）：\n" . $url;
+                }
+                $summaryResult = $gemini->generativeModel('gemini-2.5-flash-lite-preview-06-17')->generateContent($summaryPrompt);
+                $externalSummaries[$url] = trim($summaryResult->text());
+            } catch (\Exception $e) {
+                $externalSummaries[$url] = '（AI 摘要失敗）';
+            }
+        }
+        if (!empty($externalSummaries)) {
+            $searchText .= "\n\n【AI 網頁摘要】\n";
+            foreach ($externalSummaries as $url => $summary) {
+                $searchText .= "來源：$url\n摘要：$summary\n---\n";
+            }
+        }
+        // AI 綜合查證
+        $prompt = "你是一個新聞可信度分析專家。請根據提供的查證資料，分析用戶輸入的新聞內容的可信度。\n\n請嚴格按照以下 JSON 格式回覆，不要添加任何其他文字：\n\n{\n  \"analysis\": \"詳細的查證過程和可信度分析理由\",\n  \"credibility_score\": 85,\n  \"recommendation\": \"對讀者的建議和提醒\",\n  \"sources\": [\"查證來源1\", \"查證來源2\", \"查證來源3\"]\n}\n\n要求：\n- credibility_score: 0-100 的整數，代表可信度百分比\n- analysis: 詳細說明查證過程和判斷理由\n- recommendation: 給讀者的具體建議\n- sources: 列出所有查證時參考的來源\n\n查證時間：{$nowTime}\n\n查證資料：\n{$searchText}\n\n待查證新聞：\n{$plainTextMarked}\n\n資料來源：用戶貼上主文\n查證關鍵字：{$searchKeyword}";
+        $result = $gemini->generativeModel('gemini-2.5-flash-lite-preview-06-17')->generateContent($prompt);
+        $aiResponse = trim($result->text());
+        // 嘗試解析 JSON 回應
+        $analysisData = null;
+        $jsonStr = null;
+        if (preg_match('/\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}/s', $aiResponse, $matches)) {
+            $jsonStr = $matches[0];
+        } elseif (preg_match('/\{.*\}/s', $aiResponse, $matches)) {
+            $jsonStr = $matches[0];
+        }
+        if ($jsonStr) {
+            $analysisData = json_decode($jsonStr, true);
+        }
+        if (!$analysisData || json_last_error() !== JSON_ERROR_NONE) {
+            // 回退到原本格式
+            $fallbackPrompt = "請參考下列新聞資料，針對用戶輸入的內容（主文已用【主文開始】與【主文結束】標記）進行查證，並以繁體中文簡要說明查證過程與理由，最後請獨立一行以【可信度：xx%】格式標示可信度，再給出建議。請將主文原文用【主文開始】與【主文結束】標記包住。所有網址連結結束處請加上一個空格。請在回應最後以**【查證出處】**區塊列出所有引用的網站、新聞來源或資料連結。\n\n【查證時間：{$nowTime}】\n\n【新聞資料】\n" . $searchText . "\n【用戶輸入】\n" . $plainTextMarked . "\n\n---\n資料來源：用戶貼上主文\n查證關鍵字：{$searchKeyword}";
+            $fallbackResult = $gemini->generativeModel('gemini-2.5-flash-lite-preview-06-17')->generateContent($fallbackPrompt);
+            $aiText = trim($fallbackResult->text());
+        } else {
+            $aiText = $analysisData['analysis'] . "\n\n【可信度：" . $analysisData['credibility_score'] . "%】\n\n" . $analysisData['recommendation'] . "\n\n【查證出處】\n" . implode("\n", $analysisData['sources']);
+        }
+        // 解析可信度分數
+        $credibilityScore = null;
+        if (preg_match('/【可信度：(\d+)%】/', $aiText, $matches)) {
+            $credibilityScore = (int) $matches[1];
+        }
+        return [
+            'analysis_result' => $aiText,
+            'credibility_score' => $credibilityScore,
+        ];
     }
 }

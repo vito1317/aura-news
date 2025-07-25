@@ -84,10 +84,10 @@ class UpdatePopularArticles implements ShouldQueue
             $score += $article->credibility_score * 0.25;
         }
         
-        // 觀看次數分數 (50% 權重)
+        // 觀看次數分數 (25% 權重)
         if ($article->view_count) {
             $viewScore = min(100, $article->view_count / 10);
-            $score += $viewScore * 0.50;
+            $score += $viewScore * 0.25;
         }
         
         // 發布時間分數 (15% 權重)
@@ -120,7 +120,7 @@ class UpdatePopularArticles implements ShouldQueue
         }
         
         // 基礎分數 (15% 權重)
-        //$score += 15;
+        $score += 15;
         
         return round($score, 2);
     }

@@ -41,3 +41,12 @@ authStore.fetchUser().then(() => {
   app.use(router);
   app.mount('#app');
 });
+
+// PWA: register service worker if supported
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    if (import.meta.env.PROD) {
+      navigator.serviceWorker.register('/sw.js')
+    }
+  })
+}
